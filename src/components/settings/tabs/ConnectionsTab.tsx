@@ -22,6 +22,7 @@ export function ConnectionsTab({ onHostsChange }: Props) {
 
   const [hostId, setHostId] = useState('');
   const [hostStatus, setHostStatus] = useState('');
+  const [hostNotFound, setHostNotFound] = useState(false);
   const [hostBusy, setHostBusy] = useState(false);
   const [hostMsg, setHostMsg] = useState('');
 
@@ -49,15 +50,21 @@ export function ConnectionsTab({ onHostsChange }: Props) {
   }
 
   async function handleTestHost() {
-    if (!HOST_RE.test(hostId)) { setHostStatus('Invalid host ID format.'); return; }
-    setHostBusy(true); setHostStatus('');
+    if (!HOST_RE.test(hostId)) { setHostStatus('Invalid host ID format.'); setHostNotFound(false); return; }
+    setHostBusy(true); setHostStatus(''); setHostNotFound(false);
     try {
       const r = await testHost(hostId);
       const dot = r.status === 'live' ? '🟢' : r.status === 'stale' ? '🟡' : '⚪';
       setHostStatus(`${dot} ${r.status} · ${r.agentCount} agents${r.lastPostedAt ? ` · last seen ${ago(r.lastPostedAt)}` : ''}`);
     } catch (e) {
       const m = (e as Error).message;
-      setHostStatus(m.includes('404') ? '❓ unknown — save it first, then start the reporter' : `Error: ${m}`);
+      if (m.includes('404')) {
+        setHostStatus(`❓ "${hostId}" is not registered yet — click Save, then run the reporter on that machine.`);
+        setHostNotFound(true);
+      } else {
+        setHostStatus(`Error: ${m}`);
+        setHostNotFound(false);
+      }
     } finally { setHostBusy(false); }
   }
 
@@ -66,7 +73,7 @@ export function ConnectionsTab({ onHostsChange }: Props) {
     setHostBusy(true); setHostMsg('');
     try {
       await registerHost({ hostId });
-      setHostMsg('Saved.'); setHostId(''); setHostStatus('');
+      setHostMsg('Saved.'); setHostId(''); setHostStatus(''); setHostNotFound(false);
       await loadHosts();
     } catch (e) { setHostMsg((e as Error).message); }
     finally { setHostBusy(false); }
@@ -111,6 +118,23 @@ export function ConnectionsTab({ onHostsChange }: Props) {
           <Btn onClick={handleTestHost} disabled={hostBusy || !hostId} small>{hostBusy ? '…' : 'Test'}</Btn>
         </div>
         {hostStatus && <p className="font-mono text-xs pl-16" style={{ color: 'var(--text-muted)' }}>{hostStatus}</p>}
+        {hostNotFound && origin && hostId && (
+          <div className="font-mono text-[11px] rounded p-3 ml-16 flex flex-col gap-2"
+            style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+            <div style={{ color: 'var(--foreground)' }}>On the <strong>{hostId}</strong> machine:</div>
+            <div>1. Download the reporter:</div>
+            <code className="block select-all rounded px-2 py-1" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>
+              curl -fSLO {origin}/mc-reporter.mjs
+            </code>
+            <div>2. Run it (replace <code>&lt;token&gt;</code> with a value from <code>MC_INGEST_TOKENS</code> in the MC server&apos;s <code>.env</code>):</div>
+            <pre className="select-all rounded px-2 py-1 whitespace-pre-wrap break-all"
+              style={{ background: 'var(--surface)', color: 'var(--foreground)', margin: 0 }}>{`MC_REPORTER_TARGET_URL=${origin} \\
+MC_REPORTER_TOKEN=<token> \\
+MC_REPORTER_HOST_ID=${hostId} \\
+node mc-reporter.mjs`}</pre>
+            <div>Then click <strong>Test</strong> again — it should turn 🟢 live.</div>
+          </div>
+        )}
         <div className="flex justify-end gap-2 items-center">
           {hostMsg && <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{hostMsg}</span>}
           <Btn onClick={handleSaveHost} disabled={hostBusy || !hostId}>{hostBusy ? '…' : 'Save'}</Btn>
