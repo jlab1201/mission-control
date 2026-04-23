@@ -49,6 +49,28 @@ $EDITOR .env        # set WATCH_PROJECT_PATH to the project you want to observe
 pnpm dev            # open http://localhost:10000
 ```
 
+### Install as a systemd service (Linux, runs in background)
+
+```bash
+MC_AUTOSTART=systemd curl -fsSL https://raw.githubusercontent.com/jlab1201/mission-control/main/install.sh | bash
+```
+
+This builds for production (`pnpm build`), writes `~/.config/systemd/user/mission-control.service`, and runs `systemctl --user enable --now mission-control`. After install:
+
+```bash
+systemctl --user status mission-control        # check it's running
+journalctl --user -u mission-control -f        # tail logs
+systemctl --user restart mission-control       # after editing .env
+```
+
+To survive logout / reboot (recommended for servers), enable lingering once:
+
+```bash
+sudo loginctl enable-linger $USER
+```
+
+Requirements: Linux with systemd, an active user logind session (typical SSH logins via PAM qualify; bare `sudo -u` shells may not). For non-Linux or container hosts, use the Docker path in `docker/docker-compose.yml` instead.
+
 ### Manual install
 
 ```bash
@@ -68,6 +90,7 @@ Run from inside the Mission Control checkout:
 ```bash
 ./uninstall.sh              # interactive — asks before each step
 ./uninstall.sh --clean      # remove node_modules, .next, build artifacts only
+./uninstall.sh --systemd    # stop & remove the systemd --user service
 ./uninstall.sh --docker     # also stop docker compose and remove its volumes
 ./uninstall.sh --full       # everything above + .env + the whole install dir
 ./uninstall.sh --yes        # skip confirmations (for scripting)

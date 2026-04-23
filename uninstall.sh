@@ -4,8 +4,9 @@
 # Run from inside a Mission Control checkout:
 #   ./uninstall.sh              # interactive — asks before each step
 #   ./uninstall.sh --clean      # remove node_modules + .next + build artifacts only
+#   ./uninstall.sh --systemd    # stop & remove the systemd --user service
+#   ./uninstall.sh --docker     # stop docker compose and remove its volumes
 #   ./uninstall.sh --full       # everything above + .env + the whole install dir
-#   ./uninstall.sh --docker     # also stop docker compose and remove its volumes
 #   ./uninstall.sh --yes        # skip confirmations (for scripting)
 #   ./uninstall.sh --help       # show help
 #
@@ -28,19 +29,21 @@ ok()    { printf "${C_OK}[MC]${C_OFF} %s\n" "$*"; }
 CLEAN=0
 FULL=0
 DOCKER=0
+SYSTEMD=0
 ASSUME_YES=0
 
 usage() {
-  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --clean)  CLEAN=1 ;;
-    --full)   FULL=1 ;;
-    --docker) DOCKER=1 ;;
-    --yes|-y) ASSUME_YES=1 ;;
+    --clean)   CLEAN=1 ;;
+    --full)    FULL=1 ;;
+    --docker)  DOCKER=1 ;;
+    --systemd) SYSTEMD=1 ;;
+    --yes|-y)  ASSUME_YES=1 ;;
     --help|-h) usage ;;
     *) die "Unknown flag: $1 (try --help)" ;;
   esac
@@ -49,7 +52,7 @@ done
 
 # If no mode flag given, go interactive.
 INTERACTIVE=0
-if [ "$CLEAN" = "0" ] && [ "$FULL" = "0" ] && [ "$DOCKER" = "0" ]; then
+if [ "$CLEAN" = "0" ] && [ "$FULL" = "0" ] && [ "$DOCKER" = "0" ] && [ "$SYSTEMD" = "0" ]; then
   INTERACTIVE=1
 fi
 
@@ -96,6 +99,23 @@ remove_build_artifacts() {
   if [ "$removed" = "0" ]; then
     info "No build artifacts to remove."
   fi
+}
+
+systemd_teardown() {
+  if ! command -v systemctl >/dev/null 2>&1; then
+    return 0
+  fi
+  local unit_file="$HOME/.config/systemd/user/mission-control.service"
+  if [ ! -f "$unit_file" ] && ! systemctl --user list-unit-files mission-control.service >/dev/null 2>&1; then
+    return 0
+  fi
+  info "Stopping and disabling systemd user service mission-control..."
+  systemctl --user disable --now mission-control.service 2>/dev/null || true
+  if [ -f "$unit_file" ]; then
+    rm -f "$unit_file"
+    info "Removed $unit_file"
+  fi
+  systemctl --user daemon-reload 2>/dev/null || true
 }
 
 docker_teardown() {
@@ -150,6 +170,11 @@ warn_if_port_bound 10000
 
 if [ "$INTERACTIVE" = "1" ]; then
   info "Interactive uninstall. Pick what to remove."
+  if [ -f "$HOME/.config/systemd/user/mission-control.service" ]; then
+    if confirm "Stop and remove the systemd user service (mission-control.service)?"; then
+      systemd_teardown
+    fi
+  fi
   if confirm "Remove build artifacts (node_modules, .next, .turbo, tsbuildinfo)?"; then
     remove_build_artifacts
   fi
@@ -161,6 +186,9 @@ if [ "$INTERACTIVE" = "1" ]; then
     full_uninstall_dir
   fi
 else
+  if [ "$SYSTEMD" = "1" ] || [ "$FULL" = "1" ]; then
+    systemd_teardown
+  fi
   if [ "$CLEAN" = "1" ] || [ "$FULL" = "1" ]; then
     remove_build_artifacts
   fi
