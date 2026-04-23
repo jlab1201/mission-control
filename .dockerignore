@@ -1,0 +1,76 @@
+# Keep the Docker build context small and secret-free.
+# Anything listed here is NOT sent to the Docker daemon during `docker build`.
+
+# ── Secrets & Local Env ────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Git ────────────────────────────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+.github
+
+# ── Dependencies & Caches (reinstalled in-image) ───────────────────────────────
+node_modules
+.pnpm-store
+.yarn
+.swc
+.turbo
+.cache
+.next
+out
+
+# ── Build Artifacts & Generated Files ──────────────────────────────────────────
+coverage
+lcov.info
+.nyc_output
+.vitest-cache
+playwright-report
+test-results
+*.tsbuildinfo
+
+# ── Local State & Databases ────────────────────────────────────────────────────
+*.db
+*.db-journal
+pids
+*.pid
+*.pid.lock
+
+# ── Logs & Archives ────────────────────────────────────────────────────────────
+*.log
+logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.zip
+*.tar.gz
+
+# ── Claude Code Agent State (per-user, not image-ready) ────────────────────────
+.claude/agent-memory
+.claude/skills
+.claude/settings.local.json
+
+# ── IDE & OS Artifacts ─────────────────────────────────────────────────────────
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Keys & Certificates ────────────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── Docs & Dev-Only Assets (keep image slim) ───────────────────────────────────
+docs
+tests
+README.md
+CLAUDE.md
+.eslintrc.json
+vitest.config.ts
+docker/docker-compose.yml
+docker/Dockerfile

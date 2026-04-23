@@ -1,0 +1,417 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { Settings, ChevronDown, X, HelpCircle } from 'lucide-react';
+import { SseStatusIndicator } from '@/components/ui/SseStatusIndicator';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { WorkspaceSettings } from '@/components/settings/WorkspaceSettings';
+import { HelpModal } from '@/components/features/HelpModal';
+import { APP_NAME } from '@/lib/config/branding';
+import { useMissionStore, selectFilteredAgents } from '@/lib/store/missionStore';
+import type { MissionSnapshot, Task } from '@/types';
+import type { WorkspaceConfig } from '@/types/workspace';
+
+interface MissionBarProps {
+  mission: MissionSnapshot['mission'] | null;
+  tasks: Task[];
+}
+
+export function MissionBar({ mission, tasks }: MissionBarProps) {
+  const agents = useMissionStore(useShallow(selectFilteredAgents));
+  const mainAgent = agents.find((a) => a.id === 'main');
+  const model = mission?.model ?? mainAgent?.model ?? 'unknown';
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [recentPaths, setRecentPaths] = useState<string[]>([]);
+  const [switching, setSwitching] = useState<string | null>(null);
+  const projectMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const projectPath = mission?.cwd ?? '';
+  const projectLabel = projectPath
+    ? (projectPath.split('/').filter(Boolean).pop() ?? projectPath)
+    : 'no workspace';
+
+  // Fetch recent paths whenever the popover opens or the active project changes
+  useEffect(() => {
+    if (!projectMenuOpen) return;
+    fetch('/api/workspace/config')
+      .then((r) => r.json() as Promise<WorkspaceConfig>)
+      .then((cfg) => setRecentPaths(cfg.recentPaths ?? []))
+      .catch(() => setRecentPaths([]));
+  }, [projectMenuOpen, projectPath]);
+
+  // Close popover on click-outside
+  useEffect(() => {
+    if (!projectMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
+        setProjectMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [projectMenuOpen]);
+
+  const switchToProject = async (path: string) => {
+    if (path === projectPath || switching) return;
+    setSwitching(path);
+    try {
+      await fetch('/api/workspace/watch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      // The backend broadcasts a fresh snapshot; the store will hydrate automatically.
+    } finally {
+      setSwitching(null);
+      setProjectMenuOpen(false);
+    }
+  };
+
+  const forgetProject = async (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Active project cannot be removed (backend also enforces this)
+    if (path === projectPath) return;
+    try {
+      await fetch('/api/workspace/forget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      setRecentPaths((prev) => prev.filter((p) => p !== path));
+    } catch {
+      // Swallow — user can retry
+    }
+  };
+
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter((t) => t.status === 'completed').length;
+  const agentCount = agents.filter((a) => a.type !== 'subagent').length;
+  const subagentCount = agents.filter((a) => a.type === 'subagent').length;
+
+  return (
+    <>
+    <header
+      className="h-[64px] flex items-center justify-between px-6 border-b relative"
+      style={{
+        backgroundColor: 'var(--background)',
+        borderBottomColor: 'var(--border)',
+        backdropFilter: 'blur(12px)',
+        zIndex: 50,
+      }}
+    >
+      {/* Left: Logo + session */}
+      <div className="flex items-center gap-4 min-w-[220px]">
+        <div className="flex items-center gap-2">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <polygon
+              points="12,2 20,7 20,17 12,22 4,17 4,7"
+              stroke="var(--accent-primary)"
+              strokeWidth="1.5"
+              fill="color-mix(in srgb, var(--accent-primary) 8%, transparent)"
+            />
+            <polygon
+              points="12,6 17,9 17,15 12,18 7,15 7,9"
+              stroke="var(--accent-primary)"
+              strokeWidth="1"
+              fill="color-mix(in srgb, var(--accent-primary) 5%, transparent)"
+              strokeOpacity="0.5"
+            />
+          </svg>
+          <span
+            className="font-mono text-sm font-bold tracking-widest"
+            style={{ color: 'var(--accent-primary)', letterSpacing: '0.15em' }}
+          >
+            {APP_NAME.toUpperCase()}
+          </span>
+        </div>
+        <div ref={projectMenuRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setProjectMenuOpen((v) => !v)}
+            className="font-mono flex items-center gap-2 px-3 py-1.5 rounded-md transition-all duration-150"
+            style={{
+              color: projectPath ? 'var(--accent-primary)' : 'var(--text-muted)',
+              backgroundColor: projectPath
+                ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)'
+                : 'transparent',
+              border: `1px solid ${projectPath ? 'color-mix(in srgb, var(--accent-primary) 28%, transparent)' : 'var(--border)'}`,
+              fontSize: '14px',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+            }}
+            title={projectPath ? `Watching: ${projectPath}` : 'No workspace configured'}
+            aria-label="Current workspace — click to switch"
+            aria-expanded={projectMenuOpen}
+          >
+            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>›</span>
+            <span>{projectLabel}</span>
+            <ChevronDown size={12} strokeWidth={2} style={{ opacity: 0.6 }} />
+          </button>
+
+          {projectMenuOpen && (
+            <div
+              className="absolute mt-2 rounded-lg overflow-hidden"
+              style={{
+                top: '100%',
+                left: 0,
+                minWidth: '300px',
+                zIndex: 40,
+                padding: '0.25rem',
+                backgroundColor: 'var(--surface-elevated)',
+                border: '1px solid var(--border-strong)',
+                boxShadow: '0 12px 32px -8px color-mix(in srgb, var(--foreground) 35%, transparent)',
+              }}
+              role="menu"
+            >
+              {recentPaths.length === 0 ? (
+                <div
+                  className="px-3 py-2 font-mono text-xs"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  No recent projects
+                </div>
+              ) : (
+                recentPaths.map((p) => {
+                  const isActive = p === projectPath;
+                  const isBusy = switching === p;
+                  return (
+                    <div
+                      key={p}
+                      className="flex items-center gap-1 rounded-md transition-all duration-150"
+                      style={{
+                        backgroundColor: isActive
+                          ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)'
+                          : 'transparent',
+                      }}
+                    >
+                      <button
+                        onClick={() => switchToProject(p)}
+                        disabled={isActive || isBusy}
+                        className="flex-1 text-left flex items-center gap-2 px-3 py-2 font-mono transition-all duration-150"
+                        style={{
+                          color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                          cursor: isActive ? 'default' : 'pointer',
+                          fontSize: '12px',
+                          background: 'transparent',
+                        }}
+                        role="menuitem"
+                      >
+                        <span
+                          style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: isActive ? 'var(--success)' : 'transparent',
+                            border: isActive ? 'none' : `1px solid var(--border)`,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {p.split('/').filter(Boolean).pop() ?? p}
+                        </span>
+                        {isBusy && <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>…</span>}
+                      </button>
+                      {!isActive && (
+                        <button
+                          onClick={(e) => forgetProject(p, e)}
+                          className="flex items-center justify-center rounded transition-colors mr-1"
+                          style={{
+                            width: '22px',
+                            height: '22px',
+                            color: 'var(--text-muted)',
+                            background: 'transparent',
+                            flexShrink: 0,
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color = 'var(--danger)';
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'color-mix(in srgb, var(--danger) 10%, transparent)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                          }}
+                          title="Remove from recent projects"
+                          aria-label={`Forget ${p}`}
+                        >
+                          <X size={12} strokeWidth={2} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.25rem 0' }} />
+              <button
+                onClick={() => {
+                  setProjectMenuOpen(false);
+                  setSettingsOpen(true);
+                }}
+                className="w-full text-left px-3 py-2 rounded-md font-mono transition-all duration-150"
+                style={{
+                  color: 'var(--text-secondary)',
+                  fontSize: '11px',
+                  letterSpacing: '0.05em',
+                  background: 'transparent',
+                }}
+                role="menuitem"
+              >
+                Manage workspaces…
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Center: Stats */}
+      <div className="flex items-center gap-6">
+        <Stat label="model" value={model} mono />
+        <Separator />
+        <Stat
+          label="tasks"
+          value={`${completedTasks}/${totalTasks}`}
+          mono
+          title={`${completedTasks} completed of ${totalTasks} total`}
+        />
+        <Separator />
+        <Stat
+          label="agents"
+          value={String(agentCount)}
+          mono
+          title="Main session + any team roles named in TaskCreate that haven't been bound to a real spawned agent yet. Real workers live under 'subagents'."
+        />
+        <Separator />
+        <Stat
+          label="subagents"
+          value={String(subagentCount)}
+          mono
+          title="Real subagents spawned via the Agent tool, one per JSONL transcript. Counted by unique agent ID — re-runs of the same agent do not double-count."
+        />
+      </div>
+
+      {/* Right: SSE + Theme */}
+      <div className="flex items-center gap-4 min-w-[220px] justify-end">
+        <SseStatusIndicator />
+        <ThemeToggle />
+        <button
+          onClick={() => setHelpOpen(true)}
+          aria-label="Help — what do these numbers mean?"
+          title="Help — what do these numbers mean?"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '2rem',
+            height: '2rem',
+            borderRadius: '0.5rem',
+            border: '1px solid var(--border)',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'color 120ms ease, border-color 120ms ease, background 120ms ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-primary)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent-primary)';
+            (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent-primary) 8%, transparent)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+          }}
+        >
+          <HelpCircle size={14} strokeWidth={1.75} />
+        </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Open workspace settings"
+          title="Workspace settings"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '2rem',
+            height: '2rem',
+            borderRadius: '0.5rem',
+            border: '1px solid var(--border)',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'color 120ms ease, border-color 120ms ease, background 120ms ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-primary)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent-primary)';
+            (e.currentTarget as HTMLButtonElement).style.background = 'color-mix(in srgb, var(--accent-primary) 8%, transparent)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+          }}
+        >
+          <Settings size={14} strokeWidth={1.75} />
+        </button>
+      </div>
+    </header>
+
+    <WorkspaceSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+    </>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  mono = false,
+  highlight = false,
+  title,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  highlight?: boolean;
+  title?: string;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-0.5" title={title}>
+      <span
+        className={mono ? 'font-mono text-xs' : 'text-xs'}
+        style={{
+          color: highlight ? 'var(--accent-primary)' : 'var(--foreground)',
+          fontSize: '11px',
+          textShadow: highlight
+            ? '0 0 8px color-mix(in srgb, var(--accent-primary) 50%, transparent)'
+            : undefined,
+        }}
+      >
+        {value}
+      </span>
+      <span
+        className="font-mono text-[9px] uppercase tracking-widest"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function Separator() {
+  return (
+    <div
+      className="w-px h-6"
+      style={{ backgroundColor: 'var(--border)' }}
+    />
+  );
+}
+

@@ -1,0 +1,331 @@
+@import "tailwindcss";
+
+/* ── Palette: Light ("daytime lab") ── */
+:root,
+:root[data-theme="light"] {
+  --background: #f2f7fb;
+  --surface: #ffffff;
+  --surface-elevated: #eaf4fa;
+  --surface-sunken: #dce9f2;
+  --border: #a8c4d8;
+  --border-strong: #6a96b8;
+  --foreground: #0b1c2c;
+  --text-secondary: #3c5a72;
+  --text-muted: #6e8a9e;
+  --accent-primary: #06b6d4;
+  --accent-hover: #0891b2;
+  --accent-secondary: #a855f7;
+  --accent-glow: #67e8f9;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #e11d48;
+  --task-id: var(--accent-primary);
+  --sidebar-bg: #0b1c2c;
+  --sidebar-foreground: #e6f4fa;
+
+  /* Legacy aliases */
+  --card-bg: var(--surface);
+  --card-border: var(--border);
+  --primary: var(--accent-primary);
+  --primary-hover: var(--accent-hover);
+
+  /* MC legacy single-theme vars (kept for existing components that read them directly) */
+  --bg-base: var(--background);
+  --bg-surface: var(--surface);
+  --color-primary: var(--accent-primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+}
+
+/* ── Palette: Dark ("storm arrival") ── */
+:root[data-theme="dark"] {
+  --background: #07101c;
+  --surface: #10192b;
+  --surface-elevated: #1b2742;
+  --surface-sunken: #040810;
+  --border: #253554;
+  --border-strong: #3a4e7a;
+  --foreground: #e6eaf2;
+  --text-secondary: #93a0bc;
+  --text-muted: #5e6d8c;
+  --accent-primary: #dc143c;
+  --accent-hover: #a30f2d;
+  --accent-secondary: #0e7490;
+  --accent-glow: #f43f5e;
+  --success: #0d9488;
+  --warning: #b45309;
+  --danger: #dc2626;
+  --task-id: var(--accent-primary);
+  --sidebar-bg: #030711;
+  --sidebar-foreground: #e6eaf2;
+
+  /* Legacy aliases */
+  --card-bg: var(--surface);
+  --card-border: var(--border);
+  --primary: var(--accent-primary);
+  --primary-hover: var(--accent-hover);
+
+  /* MC legacy single-theme vars */
+  --bg-base: var(--background);
+  --bg-surface: var(--surface);
+  --color-primary: var(--accent-primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+}
+
+/* ── Tailwind v4: expose CSS vars as utility tokens ── */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent-primary);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-glow: var(--accent-glow);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-task-id: var(--task-id);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  /* status tokens */
+  --color-status-active: var(--success);
+  --color-status-error: var(--danger);
+  --color-status-idle: var(--warning);
+  --color-status-offline: var(--text-muted);
+  --color-status-connecting: var(--warning);
+  /* legacy */
+  --color-card-bg: var(--surface);
+  --color-card-border: var(--border);
+  --color-primary: var(--accent-primary);
+  --color-primary-hover: var(--accent-hover);
+
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-mono);
+  --radius: 0.75rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    var(--font-sans),
+    system-ui,
+    -apple-system,
+    sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ── Custom scrollbar (themed) ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-sunken);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* ── Signature motif utilities ── */
+
+/* Glass-morphism Labophase panel */
+.lab-panel {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--accent-glow) 28%, transparent) inset,
+    0 8px 32px -12px color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  backdrop-filter: blur(12px) saturate(1.15);
+  border-radius: 0.75rem;
+}
+
+/* Cyan/crimson glow hover */
+.glow-hover {
+  transition:
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+.glow-hover:hover {
+  border-color: var(--accent-primary);
+  box-shadow:
+    0 0 0 1px var(--accent-primary),
+    0 0 24px -6px var(--accent-glow);
+}
+
+/* ── Agent "working" indicator — tokenized conic ring ── */
+
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes spin-border {
+  from { --border-angle: 0deg; }
+  to { --border-angle: 360deg; }
+}
+
+.agent-working-ring {
+  position: relative;
+  border-radius: 1rem;
+  isolation: isolate;
+}
+
+.agent-working-ring::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 40%,
+    var(--accent-secondary) 50%,
+    var(--accent-primary) 55%,
+    var(--accent-glow) 60%,
+    transparent 70%
+  );
+  animation: spin-border 2s linear infinite;
+  z-index: -1;
+}
+
+.agent-working-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--surface);
+  z-index: -1;
+}
+
+/* ── Prose styling (themed) ── */
+.prose-custom p {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+.prose-custom p:last-child { margin-bottom: 0; }
+.prose-custom strong { color: var(--foreground); }
+
+/* ── Modal animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeIn { animation: fadeIn 0.2s ease-out both; }
+.animate-slideUp { animation: slideUp 0.3s ease-out both; }
+
+@keyframes message-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.animate-message-enter { animation: message-enter 200ms ease-out both; }
+.animate-typing-dot { animation: typing-dot 1.2s ease-in-out infinite; }
+
+/* ── Dropdown option styling (themed) ── */
+select option {
+  background-color: var(--surface);
+  color: var(--foreground);
+  padding: 0.5rem 0.75rem;
+}
+select option:hover,
+select option:focus { background-color: var(--surface-elevated); }
+select option:checked { background-color: var(--surface-elevated); font-weight: 500; }
+
+/* ── Restore pointer cursor on interactive elements ──
+   Tailwind v4's preflight drops the default `cursor: pointer` on <button>. */
+@layer base {
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  summary {
+    cursor: pointer;
+  }
+}
+
+/* ── Status pulse animations (used by AgentStrip, TaskCard) ── */
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(57, 255, 20, 0); }
+}
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 92, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 59, 92, 0); }
+}
+@keyframes pulse-amber {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 184, 0, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 184, 0, 0); }
+}
+@keyframes pulse-system {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.6); }
+  50% { box-shadow: 0 0 0 8px rgba(57, 255, 20, 0); }
+}
+@keyframes border-flash {
+  0% { border-color: rgba(0, 212, 255, 0.15); }
+  25% { border-color: rgba(57, 255, 20, 0.8); }
+  75% { border-color: rgba(57, 255, 20, 0.4); }
+  100% { border-color: rgba(0, 212, 255, 0.15); }
+}
+
+.pulse-green { animation: pulse-green 2s infinite; }
+.pulse-red { animation: pulse-red 2s infinite; }
+.pulse-amber { animation: pulse-amber 2s infinite; }
+.pulse-system { animation: pulse-system 2s infinite; }
+.border-flash { animation: border-flash 1s ease-out; }
+
+/* Agent active border gradient flow */
+@keyframes agent-border-flow {
+  0%   { box-shadow: inset 3px 0 0 #00d4ff, inset 0 0 20px rgba(0,212,255,0.06); }
+  50%  { box-shadow: inset 3px 0 0 #39ff14, inset 0 0 20px rgba(57,255,20,0.06); }
+  100% { box-shadow: inset 3px 0 0 #00d4ff, inset 0 0 20px rgba(0,212,255,0.06); }
+}
+.agent-active-glow { animation: agent-border-flow 3s linear infinite; }
+
+

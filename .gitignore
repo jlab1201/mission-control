@@ -1,0 +1,82 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# ── Dependencies ───────────────────────────────────────────────────────────────
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+.pnpm-store/
+
+# ── Next.js ────────────────────────────────────────────────────────────────────
+/.next/
+/out/
+next-env.d.ts
+.swc/
+
+# ── Testing & Coverage ─────────────────────────────────────────────────────────
+/coverage
+lcov.info
+.nyc_output/
+.vitest-cache/
+/playwright-report/
+/test-results/
+
+# ── Build Artifacts ────────────────────────────────────────────────────────────
+*.tsbuildinfo
+.turbo/
+.cache/
+
+# Generated reporter bundles
+/public/mc-reporter.mjs
+/mc-reporter.mjs
+
+# ── Environment Files ──────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Debug Logs ─────────────────────────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+logs/
+
+# ── Node.js Process ────────────────────────────────────────────────────────────
+pids/
+*.pid
+*.pid.lock
+
+# ── Exported Archives ──────────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+# Next.js route segment whose literal name contains ".zip" — keep tracked
+!/src/app/api/workspace/teamkit.zip/
+
+# ── Claude Code Agent State ────────────────────────────────────────────────────
+# Local-only to this repo: root .claude/ (per-user agent state, memory, skills cache)
+# and root CLAUDE.md (MC project-internal notes, not for public view).
+# Tracked (portable distribution): team-kit/.claude/ and team-kit/CLAUDE.md — these
+# rules are anchored with a leading "/" so they don't match team-kit/**.
+/.claude/
+/CLAUDE.md
+# ── IDE & Editor ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.pem
+*.key
+
+# ── OS Artifacts ───────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ── Vercel ─────────────────────────────────────────────────────────────────────
+.vercel
+
+# ── SQLite (forward-compat) ────────────────────────────────────────────────────
+*.db
+*.db-journal
