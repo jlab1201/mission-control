@@ -61,6 +61,23 @@ pnpm dev
 # Open http://localhost:10000
 ```
 
+### Uninstall
+
+Run from inside the Mission Control checkout:
+
+```bash
+./uninstall.sh              # interactive — asks before each step
+./uninstall.sh --clean      # remove node_modules, .next, build artifacts only
+./uninstall.sh --docker     # also stop docker compose and remove its volumes
+./uninstall.sh --full       # everything above + .env + the whole install dir
+./uninstall.sh --yes        # skip confirmations (for scripting)
+```
+
+Safety:
+- Refuses to run outside a Mission Control checkout (guards against running in the wrong directory).
+- Warns before deleting `.env` (may contain your `WATCH_PROJECT_PATH` and other customizations).
+- Never touches global Node.js, pnpm, or corepack — `install.sh` doesn't install those globally, so uninstall won't remove them. Use `nvm uninstall 20`, `brew uninstall node`, or your package manager to remove Node itself.
+
 ---
 
 ## Environment Variables
