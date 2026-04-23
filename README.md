@@ -46,7 +46,7 @@ Clones into `./mission-control`, installs dependencies, and copies `.env.example
 ```bash
 cd mission-control
 $EDITOR .env        # set WATCH_PROJECT_PATH to the project you want to observe
-pnpm dev            # open http://localhost:3000
+pnpm dev            # open http://localhost:10000
 ```
 
 ### Manual install
@@ -58,7 +58,7 @@ cp .env.example .env
 # Edit .env — at minimum, set WATCH_PROJECT_PATH to the project you want to observe
 pnpm install
 pnpm dev
-# Open http://localhost:3000
+# Open http://localhost:10000
 ```
 
 ---
@@ -109,8 +109,8 @@ they are **not** secret. Everything else is server-side only.
 
 | Variable | Default | Description |
 |---|---|---|
-| `MC_HOST_PORT` | `3000` | Host port bound on your machine |
-| `MC_CONTAINER_PORT` | `3000` | Port the container listens on internally |
+| `MC_HOST_PORT` | `10000` | Host port bound on your machine |
+| `MC_CONTAINER_PORT` | `10000` | Port the container listens on internally |
 
 ### Multi-Host (optional)
 
@@ -128,9 +128,9 @@ they are **not** secret. Everything else is server-side only.
 ## Dev Commands
 
 ```bash
-pnpm dev          # Start dev server  →  http://localhost:3000
+pnpm dev          # Start dev server  →  http://localhost:10000
 pnpm build        # Production build
-pnpm start        # Start production server (after build)
+pnpm start        # Start production server (after build)  →  http://localhost:10000
 pnpm test         # Run unit tests (Vitest)
 pnpm test:watch   # Watch mode
 pnpm lint         # ESLint + TypeScript checks
@@ -207,7 +207,7 @@ Motion, Pino, Zod, Vitest, Archiver.
 
 ## Security Posture
 
-- **Single-host mode** (default): no authentication. Bind MC to `localhost` only — do not expose port 3000 publicly.
+- **Single-host mode** (default): no authentication. Bind MC to `localhost` only — do not expose port 10000 publicly.
 - **Multi-host mode**: `POST /api/ingest` requires a `Bearer` token set in `MC_INGEST_TOKENS`; tokens are compared with a timing-safe hash and rate-limited per token. Rotate by changing the env var.
 - **Secrets never leave `.env`**: `.env` is gitignored, and `.dockerignore` excludes it from the Docker build context. Only `NEXT_PUBLIC_*` values reach the browser bundle.
 - **Security headers**: HSTS, CSP, X-Frame-Options `DENY`, X-Content-Type-Options `nosniff`, Referrer-Policy, and a tight Permissions-Policy are emitted by `next.config.ts`.

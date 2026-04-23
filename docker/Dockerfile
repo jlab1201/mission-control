@@ -29,7 +29,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
-ARG PORT=3000
+ARG PORT=10000
 ARG HOSTNAME=0.0.0.0
 ENV PORT=$PORT
 ENV HOSTNAME=$HOSTNAME

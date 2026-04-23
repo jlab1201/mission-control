@@ -25,6 +25,9 @@ warn()  { printf "${C_WARN}[MC]${C_OFF} %s\n" "$*" >&2; }
 die()   { printf "${C_ERR}[MC]${C_OFF} %s\n" "$*" >&2; exit 1; }
 ok()    { printf "${C_OK}[MC]${C_OFF} %s\n" "$*"; }
 
+# Plain stderr line, no [MC] prefix — used for copy-pasteable instruction blocks.
+hint() { printf "%s\n" "$*" >&2; }
+
 print_install_hint() {
   # Print OS-specific copy-paste install commands for a missing dependency.
   # $1 = dependency name (e.g. "Node.js 20", "git")
@@ -36,58 +39,58 @@ print_install_hint() {
     distro="$(. /etc/os-release && echo "${ID:-}")"
   fi
 
-  warn ""
-  warn "To install ${dep}:"
+  hint ""
+  hint "To install ${dep}:"
   case "$kind" in
     node)
       case "$os" in
         Darwin)
-          warn "  # macOS (Homebrew):"
-          warn "  brew install node@20 && brew link --overwrite --force node@20"
+          hint "  # macOS (Homebrew):"
+          hint "  brew install node@20 && brew link --overwrite --force node@20"
           ;;
         Linux)
-          warn "  # Recommended — nvm (no sudo, works on any distro):"
-          warn "  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash"
-          warn "  export NVM_DIR=\"\$HOME/.nvm\" && . \"\$NVM_DIR/nvm.sh\""
-          warn "  nvm install 20 && nvm use 20"
+          hint "  # Recommended — nvm (no sudo, works on any distro):"
+          hint "  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash"
+          hint "  export NVM_DIR=\"\$HOME/.nvm\" && . \"\$NVM_DIR/nvm.sh\""
+          hint "  nvm install 20 && nvm use 20"
           case "$distro" in
             ubuntu|debian)
-              warn ""
-              warn "  # Or system-wide via NodeSource (requires sudo):"
-              warn "  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
-              warn "  sudo apt-get install -y nodejs"
+              hint ""
+              hint "  # Or system-wide via NodeSource (requires sudo):"
+              hint "  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
+              hint "  sudo apt-get install -y nodejs"
               ;;
             rhel|centos|fedora|rocky|almalinux)
-              warn ""
-              warn "  # Or system-wide via NodeSource (requires sudo):"
-              warn "  curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo -E bash -"
-              warn "  sudo dnf install -y nodejs"
+              hint ""
+              hint "  # Or system-wide via NodeSource (requires sudo):"
+              hint "  curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo -E bash -"
+              hint "  sudo dnf install -y nodejs"
               ;;
           esac
           ;;
         *)
-          warn "  See https://nodejs.org (Node.js 20 LTS)"
+          hint "  See https://nodejs.org (Node.js 20 LTS)"
           ;;
       esac
       ;;
     git)
       case "$os" in
-        Darwin)  warn "  brew install git   # or: xcode-select --install" ;;
+        Darwin)  hint "  brew install git   # or: xcode-select --install" ;;
         Linux)
           case "$distro" in
-            ubuntu|debian)                         warn "  sudo apt-get update && sudo apt-get install -y git" ;;
-            rhel|centos|fedora|rocky|almalinux)    warn "  sudo dnf install -y git" ;;
-            arch)                                  warn "  sudo pacman -S --noconfirm git" ;;
-            alpine)                                warn "  sudo apk add git" ;;
-            *)                                     warn "  Install 'git' from your distro's package manager." ;;
+            ubuntu|debian)                         hint "  sudo apt-get update && sudo apt-get install -y git" ;;
+            rhel|centos|fedora|rocky|almalinux)    hint "  sudo dnf install -y git" ;;
+            arch)                                  hint "  sudo pacman -S --noconfirm git" ;;
+            alpine)                                hint "  sudo apk add git" ;;
+            *)                                     hint "  Install 'git' from your distro's package manager." ;;
           esac
           ;;
-        *) warn "  See https://git-scm.com/downloads" ;;
+        *) hint "  See https://git-scm.com/downloads" ;;
       esac
       ;;
   esac
-  warn ""
-  warn "Then re-run this installer."
+  hint ""
+  hint "Then re-run this installer."
 }
 
 if ! command -v git >/dev/null 2>&1; then
@@ -107,12 +110,12 @@ else
 fi
 
 if ! command -v pnpm >/dev/null 2>&1 && ! command -v corepack >/dev/null 2>&1; then
-  warn ""
-  warn "Neither pnpm nor corepack was found. Mission Control uses pnpm."
-  warn "Corepack ships with Node.js 16.10+, so reinstalling Node (see above) is"
-  warn "the simplest fix. Or install pnpm directly:"
-  warn "  npm install -g pnpm"
-  warn ""
+  hint ""
+  hint "Neither pnpm nor corepack was found. Mission Control uses pnpm."
+  hint "Corepack ships with Node.js 16.10+, so reinstalling Node (see above) is"
+  hint "the simplest fix. Or install pnpm directly:"
+  hint "  npm install -g pnpm"
+  hint ""
   die "pnpm (or corepack) is required but not installed."
 fi
 
@@ -138,7 +141,15 @@ $(ok "Install complete.")
 Next steps:
   cd $INSTALL_DIR
   \$EDITOR .env                 # set WATCH_PROJECT_PATH to the project you want to observe
-  pnpm dev                      # then open http://localhost:3000
+
+  # Local development (hot-reload, unoptimized):
+  pnpm dev                      # http://localhost:10000
+
+  # Production (optimized build):
+  pnpm build
+  pnpm start                    # http://localhost:10000
+
+Port is controlled by PORT in .env (default 10000).
 
 Docs:  README.md  |  docs/multi-host-setup.md
 EOF

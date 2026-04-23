@@ -6,7 +6,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "${MC_HOST_PORT:-3000}:${MC_CONTAINER_PORT:-3000}"
+      - "${MC_HOST_PORT:-10000}:${MC_CONTAINER_PORT:-10000}"
     environment:
       - DATABASE_URL=${DATABASE_URL:-file:/data/prod.db}
       - NODE_ENV=production
@@ -14,7 +14,7 @@ services:
       - db-data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:${MC_CONTAINER_PORT:-3000}/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:${MC_CONTAINER_PORT:-10000}/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
