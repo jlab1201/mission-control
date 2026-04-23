@@ -1,17 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { listHosts, registerHost, forgetHost, testHost, type KnownHost } from '@/lib/api/hosts';
+import { listHosts, forgetHost, type KnownHost } from '@/lib/api/hosts';
 import type { WorkspaceConfig, InspectResponse } from '@/types/workspace';
 
 const HOST_RE = /^[a-zA-Z0-9_-]{1,64}$/;
-
-function ago(iso: string): string {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  return `${Math.floor(s / 3600)}h ago`;
-}
+const HOSTS_POLL_MS = 5000;
 
 // ---------------------------------------------------------------------------
 
@@ -21,10 +15,6 @@ export function ConnectionsTab({ onHostsChange }: Props) {
   const [origin, setOrigin] = useState('');
 
   const [hostId, setHostId] = useState('');
-  const [hostStatus, setHostStatus] = useState('');
-  const [hostNotFound, setHostNotFound] = useState(false);
-  const [hostBusy, setHostBusy] = useState(false);
-  const [hostMsg, setHostMsg] = useState('');
 
   const [pathInput, setPathInput] = useState('');
   const [pathStatus, setPathStatus] = useState('');
@@ -33,11 +23,16 @@ export function ConnectionsTab({ onHostsChange }: Props) {
 
   const [hosts, setHosts] = useState<KnownHost[]>([]);
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
+  const [ingestEnabled, setIngestEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
     fetch('/api/workspace/config').then((r) => r.json() as Promise<WorkspaceConfig>).then(setConfig).catch(() => {});
+    fetch('/api/ingest/status').then((r) => r.json() as Promise<{ ingestEnabled: boolean }>)
+      .then((d) => setIngestEnabled(d.ingestEnabled)).catch(() => setIngestEnabled(null));
     void loadHosts();
+    const id = setInterval(() => { void loadHosts(); }, HOSTS_POLL_MS);
+    return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadHosts() {
@@ -49,35 +44,7 @@ export function ConnectionsTab({ onHostsChange }: Props) {
     } catch { /* non-fatal */ }
   }
 
-  async function handleTestHost() {
-    if (!HOST_RE.test(hostId)) { setHostStatus('Invalid host ID format.'); setHostNotFound(false); return; }
-    setHostBusy(true); setHostStatus(''); setHostNotFound(false);
-    try {
-      const r = await testHost(hostId);
-      const dot = r.status === 'live' ? '🟢' : r.status === 'stale' ? '🟡' : '⚪';
-      setHostStatus(`${dot} ${r.status} · ${r.agentCount} agents${r.lastPostedAt ? ` · last seen ${ago(r.lastPostedAt)}` : ''}`);
-    } catch (e) {
-      const m = (e as Error).message;
-      if (m.includes('404')) {
-        setHostStatus(`❓ "${hostId}" is not registered yet — click Save, then run the reporter on that machine.`);
-        setHostNotFound(true);
-      } else {
-        setHostStatus(`Error: ${m}`);
-        setHostNotFound(false);
-      }
-    } finally { setHostBusy(false); }
-  }
-
-  async function handleSaveHost() {
-    if (!HOST_RE.test(hostId)) { setHostMsg('Invalid host ID.'); return; }
-    setHostBusy(true); setHostMsg('');
-    try {
-      await registerHost({ hostId });
-      setHostMsg('Saved.'); setHostId(''); setHostStatus(''); setHostNotFound(false);
-      await loadHosts();
-    } catch (e) { setHostMsg((e as Error).message); }
-    finally { setHostBusy(false); }
-  }
+  const hostIdValid = HOST_RE.test(hostId);
 
   async function handleTestPath() {
     if (!pathInput) return;
@@ -109,16 +76,25 @@ export function ConnectionsTab({ onHostsChange }: Props) {
   return (
     <div className="flex flex-col gap-4">
 
-      {/* HOST CONNECTION */}
-      <Box label="Host connection">
+      {/* ADD A HOST */}
+      <Box label="Add a host">
+        {ingestEnabled === false && (
+          <div className="font-mono text-[11px] rounded p-2"
+            style={{ background: 'color-mix(in srgb, var(--warning, #d97706) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--warning, #d97706) 40%, transparent)', color: 'var(--foreground)' }}>
+            ⚠ Multi-host ingest is disabled. Set <code>MC_INGEST_TOKENS</code> in the MC server&apos;s <code>.env</code> (generate with <code>openssl rand -hex 32</code>) and restart before remote reporters can connect.
+          </div>
+        )}
         <div className="flex gap-2 items-center">
           <label htmlFor="host-id" className="font-mono text-xs flex-shrink-0" style={{ color: 'var(--text-muted)', width: 56 }}>Host ID</label>
           <input id="host-id" value={hostId} onChange={(e) => setHostId(e.target.value)} placeholder="my-host"
             aria-label="Host ID" className="flex-1 rounded px-2 py-1 font-mono text-xs" style={inputStyle} />
-          <Btn onClick={handleTestHost} disabled={hostBusy || !hostId} small>{hostBusy ? '…' : 'Test'}</Btn>
         </div>
-        {hostStatus && <p className="font-mono text-xs pl-16" style={{ color: 'var(--text-muted)' }}>{hostStatus}</p>}
-        {hostNotFound && origin && hostId && (
+        {hostId && !hostIdValid && (
+          <p className="font-mono text-xs pl-16" style={{ color: 'var(--danger, #ef4444)' }}>
+            Use 1–64 chars: letters, digits, hyphen, underscore.
+          </p>
+        )}
+        {hostIdValid && origin && (
           <div className="font-mono text-[11px] rounded p-3 ml-16 flex flex-col gap-2"
             style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
             <div style={{ color: 'var(--foreground)' }}>On the <strong>{hostId}</strong> machine:</div>
@@ -132,13 +108,9 @@ export function ConnectionsTab({ onHostsChange }: Props) {
 MC_REPORTER_TOKEN=<token> \\
 MC_REPORTER_HOST_ID=${hostId} \\
 node mc-reporter.mjs`}</pre>
-            <div>Then click <strong>Test</strong> again — it should turn 🟢 live.</div>
+            <div>When the reporter posts, <strong>{hostId}</strong> appears below in Known hosts (auto-refreshed every {HOSTS_POLL_MS / 1000}s).</div>
           </div>
         )}
-        <div className="flex justify-end gap-2 items-center">
-          {hostMsg && <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>{hostMsg}</span>}
-          <Btn onClick={handleSaveHost} disabled={hostBusy || !hostId}>{hostBusy ? '…' : 'Save'}</Btn>
-        </div>
       </Box>
 
       {/* PROJECT PATH */}
