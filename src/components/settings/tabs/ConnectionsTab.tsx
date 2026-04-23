@@ -24,12 +24,14 @@ export function ConnectionsTab({ onHostsChange }: Props) {
   const [hosts, setHosts] = useState<KnownHost[]>([]);
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   const [ingestEnabled, setIngestEnabled] = useState<boolean | null>(null);
+  const [ingestToken, setIngestToken] = useState<string | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
     fetch('/api/workspace/config').then((r) => r.json() as Promise<WorkspaceConfig>).then(setConfig).catch(() => {});
-    fetch('/api/ingest/status').then((r) => r.json() as Promise<{ ingestEnabled: boolean }>)
-      .then((d) => setIngestEnabled(d.ingestEnabled)).catch(() => setIngestEnabled(null));
+    fetch('/api/ingest/status').then((r) => r.json() as Promise<{ ingestEnabled: boolean; token: string | null }>)
+      .then((d) => { setIngestEnabled(d.ingestEnabled); setIngestToken(d.token); })
+      .catch(() => { setIngestEnabled(null); setIngestToken(null); });
     void loadHosts();
     const id = setInterval(() => { void loadHosts(); }, HOSTS_POLL_MS);
     return () => clearInterval(id);
@@ -94,23 +96,45 @@ export function ConnectionsTab({ onHostsChange }: Props) {
             Use 1–64 chars: letters, digits, hyphen, underscore.
           </p>
         )}
-        {hostIdValid && origin && (
-          <div className="font-mono text-[11px] rounded p-3 ml-16 flex flex-col gap-2"
-            style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-            <div style={{ color: 'var(--foreground)' }}>On the <strong>{hostId}</strong> machine:</div>
-            <div>1. Download the reporter:</div>
-            <code className="block select-all rounded px-2 py-1" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>
-              curl -fSLO {origin}/mc-reporter.mjs
-            </code>
-            <div>2. Run it (replace <code>&lt;token&gt;</code> with a value from <code>MC_INGEST_TOKENS</code> in the MC server&apos;s <code>.env</code>):</div>
-            <pre className="select-all rounded px-2 py-1 whitespace-pre-wrap break-all"
-              style={{ background: 'var(--surface)', color: 'var(--foreground)', margin: 0 }}>{`MC_REPORTER_TARGET_URL=${origin} \\
-MC_REPORTER_TOKEN=<token> \\
-MC_REPORTER_HOST_ID=${hostId} \\
-node mc-reporter.mjs`}</pre>
-            <div>When the reporter posts, <strong>{hostId}</strong> appears below in Known hosts (auto-refreshed every {HOSTS_POLL_MS / 1000}s).</div>
-          </div>
-        )}
+        {origin && (() => {
+          const displayHostId = hostIdValid ? hostId : '<host-id>';
+          const downloadCmd = `curl -fSLO ${origin}/mc-reporter.mjs`;
+          const tokenForCopy = ingestToken ?? '<token>';
+          const tokenForDisplay = ingestToken ? maskToken(ingestToken) : '<token>';
+          const runCmdDisplay = `MC_REPORTER_TARGET_URL=${origin} \\\nMC_REPORTER_TOKEN=${tokenForDisplay} \\\nMC_REPORTER_HOST_ID=${displayHostId} \\\nnode mc-reporter.mjs`;
+          const runCmdCopy = `MC_REPORTER_TARGET_URL=${origin} \\\nMC_REPORTER_TOKEN=${tokenForCopy} \\\nMC_REPORTER_HOST_ID=${displayHostId} \\\nnode mc-reporter.mjs`;
+          return (
+            <div className="font-mono text-[11px] rounded p-3 ml-16 flex flex-col gap-2"
+              style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+              <div style={{ color: 'var(--foreground)' }}>
+                On the <strong>{hostIdValid ? hostId : '<host-id>'}</strong> machine:
+              </div>
+              <div>
+                1. Download the{' '}
+                <a href="/mc-reporter.mjs" download
+                  style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>
+                  reporter
+                </a>{' '}
+                or run the command:
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="flex-1 select-all rounded px-2 py-1" style={{ background: 'var(--surface)', color: 'var(--foreground)' }}>
+                  {downloadCmd}
+                </code>
+                <CopyBtn value={downloadCmd} />
+              </div>
+              <div>2. Run it:</div>
+              <div className="flex items-start gap-2">
+                <pre className="flex-1 select-all rounded px-2 py-1 whitespace-pre-wrap break-all"
+                  style={{ background: 'var(--surface)', color: 'var(--foreground)', margin: 0 }}>{runCmdDisplay}</pre>
+                <CopyBtn value={runCmdCopy} />
+              </div>
+              <div>
+                When the reporter posts, <strong>{hostIdValid ? hostId : 'the host'}</strong> appears below in Known hosts (auto-refreshed every {HOSTS_POLL_MS / 1000}s).
+              </div>
+            </div>
+          );
+        })()}
       </Box>
 
       {/* PROJECT PATH */}
@@ -178,22 +202,37 @@ node mc-reporter.mjs`}</pre>
         }
       </Box>
 
-      {/* REPORTER SCRIPT */}
-      <Box label="Reporter script">
-        <div className="flex items-center gap-3">
-          <a href="/mc-reporter.mjs" download className="font-mono text-xs px-3 py-1.5 rounded"
-            style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--foreground)', textDecoration: 'none' }}>
-            Download mc-reporter.mjs
-          </a>
-        </div>
-        {origin && (
-          <code className="font-mono text-[11px] rounded px-3 py-2 block select-all"
-            style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-            curl -fSLO {origin}/mc-reporter.mjs
-          </code>
-        )}
-      </Box>
     </div>
+  );
+}
+
+function maskToken(t: string): string {
+  if (t.length <= 8) return '•'.repeat(t.length);
+  return `${t.slice(0, 4)}${'•'.repeat(12)}${t.slice(-4)}`;
+}
+
+function CopyBtn({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  async function handleClick() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard API unavailable (non-secure context); fail silently */
+    }
+  }
+  return (
+    <button onClick={handleClick} aria-label="Copy to clipboard"
+      className="font-mono text-[10px] rounded px-2 py-1 flex-shrink-0 transition-colors"
+      style={{
+        background: copied ? 'color-mix(in srgb, var(--accent-primary) 20%, transparent)' : 'var(--surface-elevated)',
+        border: '1px solid var(--border)',
+        color: copied ? 'var(--accent-primary)' : 'var(--foreground)',
+        cursor: 'pointer',
+      }}>
+      {copied ? 'Copied' : 'Copy'}
+    </button>
   );
 }
 
