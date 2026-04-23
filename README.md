@@ -87,6 +87,31 @@ pnpm dev
 # Open http://localhost:10000
 ```
 
+### Update
+
+From inside the checkout:
+
+```bash
+./update.sh
+```
+
+Or from anywhere (auto-detects `./mission-control` subdirectory, or use `MC_INSTALL_DIR=/path/to/mission-control`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jlab1201/mission-control/main/update.sh | bash
+```
+
+`update.sh` does:
+
+1. Refuses if there are uncommitted changes in the checkout.
+2. `git fetch` + `git pull --ff-only` on the current branch (override with `MC_BRANCH=...`).
+3. Warns if `.env.example` gained keys your `.env` doesn't have.
+4. `pnpm install` to pick up dep changes.
+5. If `mission-control.service` is installed: `pnpm build` + `systemctl --user restart mission-control`, and shows status.
+6. Otherwise prints how to restart manually (dev server / docker / pnpm start).
+
+Env overrides: `MC_SKIP_BUILD=1`, `MC_SKIP_RESTART=1`, `MC_INSTALL_DIR`, `MC_BRANCH`.
+
 ### Uninstall
 
 Run from inside the Mission Control checkout:

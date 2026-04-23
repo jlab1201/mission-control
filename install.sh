@@ -126,6 +126,17 @@ if ! command -v pnpm >/dev/null 2>&1 && ! command -v corepack >/dev/null 2>&1; t
 fi
 
 if [ -e "$INSTALL_DIR" ]; then
+  if [ -f "$INSTALL_DIR/package.json" ] && [ -d "$INSTALL_DIR/team-kit" ] && \
+     grep -q '"name": *"mission-control"' "$INSTALL_DIR/package.json" 2>/dev/null; then
+    hint ""
+    hint "An existing Mission Control install was found at: $INSTALL_DIR"
+    hint "To update it, run:"
+    hint "  cd $INSTALL_DIR && ./update.sh"
+    hint "Or from anywhere:"
+    hint "  curl -fsSL https://raw.githubusercontent.com/jlab1201/mission-control/main/update.sh | bash"
+    hint ""
+    die "'$INSTALL_DIR' already exists — use update.sh to update, or set MC_INSTALL_DIR to a different path."
+  fi
   die "'$INSTALL_DIR' already exists. Remove it or set MC_INSTALL_DIR to a different path."
 fi
 

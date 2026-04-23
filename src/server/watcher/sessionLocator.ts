@@ -49,8 +49,33 @@ export function getWatchedProjectPath(): string {
     return process.env.WATCH_PROJECT_PATH;
   }
 
-  // 3. cwd()
-  return cwd();
+  // 3. cwd — but don't watch Mission Control's own install dir.
+  const fallback = cwd();
+  if (looksLikeMissionControlRoot(fallback)) {
+    if (!selfWatchWarned) {
+      selfWatchWarned = true;
+      console.warn(
+        `[MC] WATCH_PROJECT_PATH is not set and cwd (${fallback}) is the ` +
+          `Mission Control install itself. Falling back to ${homedir()}. ` +
+          `Set WATCH_PROJECT_PATH in .env to watch a specific project.`,
+      );
+    }
+    return homedir();
+  }
+  return fallback;
+}
+
+let selfWatchWarned = false;
+
+function looksLikeMissionControlRoot(path: string): boolean {
+  try {
+    const pkgPath = join(path, 'package.json');
+    if (!existsSync(pkgPath) || !existsSync(join(path, 'team-kit'))) return false;
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { name?: string };
+    return pkg.name === 'mission-control';
+  } catch {
+    return false;
+  }
 }
 
 export function findCurrentSession(): SessionLocation | null {
