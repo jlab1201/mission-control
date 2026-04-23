@@ -41,26 +41,17 @@ Install pnpm if you don't have it: `npm install -g pnpm`
 curl -fsSL https://raw.githubusercontent.com/jlab1201/mission-control/main/install.sh | bash
 ```
 
-Clones into `./mission-control`, installs dependencies, and copies `.env.example` → `.env`. Override with `MC_INSTALL_DIR=/some/path` or `MC_REPO_URL=...`. Then:
+Clones into `./mission-control`, installs dependencies, and copies `.env.example` → `.env`. Override with `MC_INSTALL_DIR=/some/path` or `MC_REPO_URL=...`.
 
-```bash
-cd mission-control
-$EDITOR .env        # set WATCH_PROJECT_PATH to the project you want to observe
-pnpm dev            # open http://localhost:10000
-```
+**Autostart behavior (default):** on Linux with a usable `systemd --user` session, the installer automatically builds for production, installs `~/.config/systemd/user/mission-control.service`, and starts it — the app is already running on `http://localhost:10000` when the script exits. On macOS, non-systemd Linux, or containers without a user logind session, it falls back to printing manual "Next steps" instead.
 
-### Install as a systemd service (Linux, runs in background)
-
-```bash
-MC_AUTOSTART=systemd curl -fsSL https://raw.githubusercontent.com/jlab1201/mission-control/main/install.sh | bash
-```
-
-This builds for production (`pnpm build`), writes `~/.config/systemd/user/mission-control.service`, and runs `systemctl --user enable --now mission-control`. After install:
+Manage the service:
 
 ```bash
 systemctl --user status mission-control        # check it's running
 journalctl --user -u mission-control -f        # tail logs
 systemctl --user restart mission-control       # after editing .env
+systemctl --user disable --now mission-control # stop & disable
 ```
 
 To survive logout / reboot (recommended for servers), enable lingering once:
@@ -69,7 +60,20 @@ To survive logout / reboot (recommended for servers), enable lingering once:
 sudo loginctl enable-linger $USER
 ```
 
-Requirements: Linux with systemd, an active user logind session (typical SSH logins via PAM qualify; bare `sudo -u` shells may not). For non-Linux or container hosts, use the Docker path in `docker/docker-compose.yml` instead.
+**Controlling autostart:**
+
+```bash
+# Default — autostart on Linux when systemd is available
+curl -fsSL .../install.sh | bash
+
+# Force systemd — fail loudly if it's not available
+curl -fsSL .../install.sh | MC_AUTOSTART=systemd bash
+
+# Never autostart — always print manual Next steps
+curl -fsSL .../install.sh | MC_AUTOSTART=none bash
+```
+
+> **Note:** `VAR=x curl … | bash` does NOT forward `VAR` to bash — the variable is only set for `curl`. Put the env assignment before `bash` (`| MC_AUTOSTART=… bash`), or `export` it first.
 
 ### Manual install
 

@@ -8,9 +8,12 @@
 #   MC_REPO_URL      Git URL to clone (default: public GitHub repo)
 #   MC_BRANCH        Branch to check out (default: main)
 #   MC_SKIP_SETUP    Set to 1 to skip dependency install and .env copy
-#   MC_AUTOSTART     Set to "systemd" to build and install+start a systemd
-#                    --user service (Linux only; survives reboot with
-#                    `loginctl enable-linger`).
+#   MC_AUTOSTART     Controls post-install behavior. Values:
+#                      auto     (default) install & start a systemd --user
+#                               service on Linux when systemd is available;
+#                               otherwise print manual "Next steps"
+#                      systemd  force systemd; fail if not available
+#                      none     never autostart — always print "Next steps"
 
 set -euo pipefail
 
@@ -137,25 +140,27 @@ else
   bash scripts/setup.sh
 fi
 
-install_systemd_unit() {
-  # $1 = absolute install dir
-  local install_dir="$1"
-
+# Prints a one-line reason and returns non-zero if systemd --user is unusable.
+# No side effects beyond the echo. Safe to call from `auto` mode.
+probe_systemd() {
   if [ "$(uname -s)" != "Linux" ]; then
-    die "MC_AUTOSTART=systemd is Linux-only (this is $(uname -s))."
+    echo "host is $(uname -s), not Linux"; return 1
   fi
   if ! command -v systemctl >/dev/null 2>&1; then
-    die "systemctl not found — systemd is not available on this system."
+    echo "systemctl not found"; return 1
   fi
   if ! systemctl --user show-environment >/dev/null 2>&1; then
-    warn "No user systemd session detected."
-    hint ""
-    hint "This usually means you're running as a user without a logind session"
-    hint "(e.g. inside a container or over a bare SSH connection without PAM)."
-    hint "Try logging in directly as the target user and re-running with MC_AUTOSTART=systemd,"
-    hint "or use MC_AUTOSTART=docker instead."
-    hint ""
-    die "systemd --user is not usable here."
+    echo "no user systemd session (not logged in via logind, or running in a bare container)"
+    return 1
+  fi
+  return 0
+}
+
+install_systemd_unit() {
+  # $1 = absolute install dir
+  local install_dir="$1" reason=""
+  if ! reason="$(probe_systemd)"; then
+    die "systemd --user is not usable here: $reason"
   fi
 
   local pnpm_bin node_bin
@@ -222,11 +227,8 @@ UNIT
   fi
 }
 
-AUTOSTART="${MC_AUTOSTART:-}"
-case "$AUTOSTART" in
-  ""|0|no|false)
-    # Default: don't autostart. Print next-steps so the user can choose.
-    cat <<EOF
+print_next_steps() {
+  cat <<EOF
 
 $(ok "Install complete.")
 
@@ -241,20 +243,40 @@ Next steps:
   pnpm build
   pnpm start                    # http://localhost:10000
 
-  # Or re-run the installer with MC_AUTOSTART=systemd to install as a
-  # systemd --user service that starts on boot.
+  # Or re-run the installer with MC_AUTOSTART=systemd on a Linux host to
+  # install & start as a systemd --user service.
 
 Port is controlled by PORT in .env (default 10000).
 
 Docs:  README.md  |  docs/multi-host-setup.md
 EOF
+}
+
+run_systemd_install() {
+  install_systemd_unit "$(pwd)"
+  ok "Install complete. Mission Control is running on http://localhost:10000"
+  info "Edit $(pwd)/.env and then: systemctl --user restart mission-control"
+}
+
+AUTOSTART="${MC_AUTOSTART:-auto}"
+case "$AUTOSTART" in
+  none|0|no|false)
+    print_next_steps
+    ;;
+  auto)
+    reason=""
+    if reason="$(probe_systemd)"; then
+      info "Autostart: systemd --user is available — installing as a background service."
+      run_systemd_install
+    else
+      info "Autostart skipped ($reason) — falling back to manual start."
+      print_next_steps
+    fi
     ;;
   systemd)
-    install_systemd_unit "$(pwd)"
-    ok "Install complete. Mission Control is running on http://localhost:10000"
-    info "Edit $(pwd)/.env and then: systemctl --user restart mission-control"
+    run_systemd_install
     ;;
   *)
-    die "Unknown MC_AUTOSTART value: '$AUTOSTART'. Supported: systemd (or unset)."
+    die "Unknown MC_AUTOSTART value: '$AUTOSTART'. Supported: auto (default), systemd, none."
     ;;
 esac
