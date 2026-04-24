@@ -115,7 +115,7 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
   return (
     <>
     <header
-      className="h-[64px] flex items-center justify-between px-6 border-b relative"
+      className="h-[64px] flex items-center justify-between gap-4 px-6 border-b relative"
       style={{
         backgroundColor: 'var(--background)',
         borderBottomColor: 'var(--border)',
@@ -124,7 +124,7 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
       }}
     >
       {/* Left: Logo + session */}
-      <div className="flex items-center gap-4 min-w-[220px]">
+      <div className="flex items-center gap-4 min-w-0 flex-shrink">
         <div className="flex items-center gap-2">
           <svg
             width="22"
@@ -154,12 +154,12 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
             {APP_NAME.toUpperCase()}
           </span>
         </div>
-        <div ref={projectMenuRef} style={{ position: 'relative' }}>
+        <div ref={projectMenuRef} className="min-w-0" style={{ position: 'relative' }}>
           <button
             onClick={handleButtonClick}
             onMouseEnter={() => { if (!hasProjects) setHoverTooltip(true); }}
             onMouseLeave={() => setHoverTooltip(false)}
-            className="font-mono flex items-center gap-2 px-3 py-1.5 rounded-md transition-all duration-150"
+            className="font-mono flex items-center gap-2 px-3 py-1.5 rounded-md transition-all duration-150 max-w-full"
             style={{
               color: projectPath || selectedHostId ? 'var(--accent-primary)' : 'var(--text-muted)',
               backgroundColor: projectPath || selectedHostId
@@ -175,9 +175,9 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
             aria-label="Current workspace — click to switch"
             aria-expanded={projectMenuOpen}
           >
-            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>›</span>
-            <span>{projectLabel}</span>
-            {hasProjects && <ChevronDown size={12} strokeWidth={2} style={{ opacity: 0.6 }} />}
+            <span className="flex-shrink-0" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>›</span>
+            <span className="truncate min-w-0">{projectLabel}</span>
+            {hasProjects && <ChevronDown size={12} strokeWidth={2} className="flex-shrink-0" style={{ opacity: 0.6 }} />}
           </button>
 
           {/* Tooltip: shown only when no projects and hovering */}
@@ -314,7 +314,7 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
       </div>
 
       {/* Center: Stats */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-6 flex-shrink-0">
         <Stat label="model" value={model} mono />
         <Separator />
         <Stat
@@ -340,7 +340,7 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
       </div>
 
       {/* Right: SSE + Theme */}
-      <div className="flex items-center gap-4 min-w-[220px] justify-end">
+      <div className="flex items-center gap-4 justify-end flex-shrink-0">
         <SseStatusIndicator />
         <ThemeToggle />
         <button

@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { statSync } from 'fs';
 import {
   parseJsonlLines,
   extractToolUses,
@@ -11,6 +12,7 @@ import { registry } from './registry';
 import { ownerMatchesAgent, reconcileTeamPlaceholders } from './teamMatcher';
 import { costForUsage } from '../pricing';
 import { localHostId, localHostLabel } from './watcherCore';
+import { AGENT_ACTIVE_THRESHOLD_MS } from '@/lib/config/runtime';
 import type { Task, Agent, AgentStatus } from '@/types';
 
 /** Metadata captured when an Agent tool_use is first seen, before the result arrives */
@@ -50,11 +52,34 @@ export class MainSessionWatcher {
   async coldStart(): Promise<void> {
     const text = await this.reader.coldStart();
     if (text) this.processText(text);
+    this.refreshMainStatus();
   }
 
   async poll(): Promise<void> {
     const text = await this.reader.readNew();
     if (text) this.processText(text);
+    this.refreshMainStatus();
+  }
+
+  /**
+   * Demote the main agent from 'active' to 'idle' once its transcript has been
+   * quiet for AGENT_ACTIVE_THRESHOLD_MS. Mirrors SubagentWatcher.refreshAgentStatus
+   * but never marks main 'completed' — it's the long-lived user session.
+   */
+  private refreshMainStatus(): void {
+    const main = registry.getAgent('main');
+    if (!main || main.status !== 'active') return;
+
+    let mtimeMs = 0;
+    try {
+      mtimeMs = statSync(this.jsonlPath).mtimeMs;
+    } catch {
+      return;
+    }
+    const ageMs = Date.now() - mtimeMs;
+    if (ageMs > AGENT_ACTIVE_THRESHOLD_MS) {
+      registry.upsertAgent({ ...main, status: 'idle' });
+    }
   }
 
   private processText(text: string): void {

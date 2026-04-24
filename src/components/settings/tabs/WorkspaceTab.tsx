@@ -35,6 +35,10 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
   const [disconnectBusy, setDisconnectBusy] = useState(false);
   const hostMenuRef = useRef<HTMLDivElement | null>(null);
 
+  // Remove-project modal state
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+
   // Registered Projects state
   const [projects, setProjects] = useState<RegisteredProjectRow[]>([]);
 
@@ -113,12 +117,22 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
     }
   }
 
-  async function handleRemoveProject(id: string, name: string) {
-    if (!confirm(`Remove "${name}" from registered projects?`)) return;
+  function requestRemoveProject(id: string, name: string) {
+    setRemoveTarget({ id, name });
+  }
+
+  async function confirmRemoveProject() {
+    if (!removeTarget) return;
+    setRemoveBusy(true);
     try {
-      await deleteProject(id);
+      await deleteProject(removeTarget.id);
       void loadProjects();
-    } catch { /* non-fatal */ }
+      setRemoveTarget(null);
+    } catch {
+      // non-fatal — keep modal open so user can retry or cancel
+    } finally {
+      setRemoveBusy(false);
+    }
   }
 
   function handleDisconnectHost(hostId: string, hostLabel: string) {
@@ -407,7 +421,7 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
                         <Btn
                           small
                           variant="danger"
-                          onClick={() => { void handleRemoveProject(p.id, p.name); }}
+                          onClick={() => { requestRemoveProject(p.id, p.name); }}
                         >
                           Remove
                         </Btn>
@@ -468,6 +482,56 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
               }}
             >
               {disconnectBusy ? 'Disconnecting…' : 'Disconnect'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!removeTarget}
+        onClose={() => { if (!removeBusy) setRemoveTarget(null); }}
+        maxWidth="max-w-md"
+        aria-label="Remove registered project"
+      >
+        <div className="flex flex-col gap-3 p-5">
+          <h2
+            className="font-mono text-sm font-bold tracking-widest"
+            style={{ color: 'var(--foreground)', letterSpacing: '0.1em' }}
+          >
+            REMOVE PROJECT?
+          </h2>
+          <p className="font-mono text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            Remove <strong style={{ color: 'var(--foreground)' }}>{removeTarget?.name}</strong>{' '}
+            from registered projects? The files on disk are not touched — you can register it again later.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setRemoveTarget(null)}
+              disabled={removeBusy}
+              className="font-mono text-xs px-3 py-1.5 rounded transition-colors"
+              style={{
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--border)',
+                color: 'var(--foreground)',
+                cursor: removeBusy ? 'not-allowed' : 'pointer',
+                opacity: removeBusy ? 0.6 : 1,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { void confirmRemoveProject(); }}
+              disabled={removeBusy}
+              className="font-mono text-xs px-3 py-1.5 rounded transition-colors"
+              style={{
+                background: 'color-mix(in srgb, var(--danger) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--danger) 40%, transparent)',
+                color: 'var(--danger)',
+                cursor: removeBusy ? 'not-allowed' : 'pointer',
+                opacity: removeBusy ? 0.6 : 1,
+              }}
+            >
+              {removeBusy ? 'Removing…' : 'Remove'}
             </button>
           </div>
         </div>

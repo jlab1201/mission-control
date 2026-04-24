@@ -1,3 +1,4 @@
+import { statSync } from 'fs';
 import { findCurrentSession, getWatchedProjectPath } from './sessionLocator';
 import { MainSessionWatcher } from './mainSessionWatcher';
 import { SubagentWatcher } from './subagentWatcher';
@@ -5,7 +6,10 @@ import { registry } from './registry';
 import { loadSnapshot } from '@/server/persistence/snapshotStore';
 import { broadcast } from '@/lib/eventBus';
 import type { Agent } from '@/types';
-import { POLL_INTERVAL_MS } from '@/lib/config/runtime';
+import {
+  POLL_INTERVAL_MS,
+  AGENT_ACTIVE_THRESHOLD_MS,
+} from '@/lib/config/runtime';
 import { localHostId, localHostLabel } from './watcherCore';
 
 interface WatcherInstance {
@@ -57,13 +61,23 @@ function bootWatcher(): void {
   registry.sessionId = session.sessionId;
   g.__missionRegistry = registry;
 
-  // Create the "main" agent placeholder now (will be enriched by watcher)
+  // Create the "main" agent placeholder now (will be enriched by watcher).
+  // Start as 'idle' unless the transcript was just touched — otherwise an old
+  // session would boot with a spinning "working" ring even though nothing is
+  // running.
   const now = new Date().toISOString();
+  let initialStatus: Agent['status'] = 'idle';
+  try {
+    const ageMs = Date.now() - statSync(session.jsonlPath).mtimeMs;
+    if (ageMs <= AGENT_ACTIVE_THRESHOLD_MS) initialStatus = 'active';
+  } catch {
+    // fall through — idle
+  }
   const mainAgent: Agent = {
     id: 'main',
     type: 'main',
     name: 'main',
-    status: 'active',
+    status: initialStatus,
     phase: 'exploring',
     startedAt: now,
     lastActiveAt: now,
