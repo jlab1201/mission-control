@@ -7,8 +7,15 @@ export const runtime = 'nodejs';
 
 const HOST_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
 
+const ERR_MESSAGES: Record<string, string> = {
+  'invalid-host-id': 'Host ID contains invalid characters',
+  'cannot-disconnect-local': 'Cannot disconnect the local host',
+  'not-found': 'Host not found',
+};
+
 function errJson(status: number, code: string): Response {
-  return new Response(JSON.stringify({ error: { code, message: code } }), {
+  const message = ERR_MESSAGES[code] ?? code;
+  return new Response(JSON.stringify({ error: { code, message } }), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });

@@ -24,9 +24,15 @@ const RegisterHostSchema = z
   })
   .strict();
 
+const ERR_MESSAGES: Record<string, string> = {
+  'invalid-json': 'Request body must be valid JSON',
+  validation: 'Invalid request body',
+};
+
 function errJson(status: number, code: string, details?: unknown): Response {
+  const message = ERR_MESSAGES[code] ?? code;
   return new Response(
-    JSON.stringify({ error: { code, message: code, ...(details ? { details } : {}) } }),
+    JSON.stringify({ error: { code, message, ...(details ? { details } : {}) } }),
     { status, headers: { 'Content-Type': 'application/json' } },
   );
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,9 +37,15 @@ await build({
 });
 
 // Size guard — warn if the bundle balloons past 500 KB
-const bytes = readFileSync(outfile).byteLength;
-const kb = (bytes / 1024).toFixed(1);
+const bundleBytes = readFileSync(outfile);
+const kb = (bundleBytes.byteLength / 1024).toFixed(1);
 console.log(`[build-reporter] wrote ${outfile} (${kb} KB)`);
-if (bytes > 500 * 1024) {
+if (bundleBytes.byteLength > 500 * 1024) {
   console.warn(`[build-reporter] WARN: bundle exceeds 500 KB — check for unintended deps`);
 }
+
+// Supply-chain integrity — write sha256 of the bundle as a sibling file
+const hash = createHash('sha256').update(bundleBytes).digest('hex');
+const hashFile = `${outfile}.sha256`;
+writeFileSync(hashFile, hash + '\n', 'utf-8');
+console.log(`[build-reporter] wrote ${hashFile} (sha256: ${hash})`);

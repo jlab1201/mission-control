@@ -49,7 +49,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   // For remote hosts, verify the host is known in the registry
   if (!isLocal && !isKnownHost(hostId)) {
-    return json({ error: 'unknown-host' }, 400);
+    return json({ error: { code: 'HOST_UNKNOWN', message: 'Host not registered' } }, 400);
   }
 
   try {

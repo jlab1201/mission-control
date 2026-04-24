@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { installTeamKit } from '@/server/workspace/install';
 import type { InstallResponse } from '@/types/workspace';
+import type { ApiErrorResponse } from '@/types/index';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -12,23 +13,24 @@ const bodySchema = z.object({
   createIfMissing: z.boolean().optional(),
 });
 
-type ErrorEnvelope = { error: string | { code: string; message: string } };
-
 export async function POST(
   req: NextRequest
-): Promise<NextResponse<InstallResponse | ErrorEnvelope>> {
+): Promise<NextResponse<InstallResponse | ApiErrorResponse>> {
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'INVALID_JSON', message: 'Request body must be valid JSON' } },
+      { status: 400 },
+    );
   }
 
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Validation error', details: parsed.error.flatten().fieldErrors },
-      { status: 422 }
+      { error: { code: 'VALIDATION_ERROR', message: 'Invalid request body', details: parsed.error.flatten().fieldErrors } },
+      { status: 422 },
     );
   }
 

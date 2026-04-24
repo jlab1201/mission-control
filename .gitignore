@@ -28,6 +28,7 @@ lcov.info
 
 # Generated reporter bundles
 /public/mc-reporter.mjs
+/public/mc-reporter.mjs.sha256
 /mc-reporter.mjs
 
 # ── Environment Files ──────────────────────────────────────────────────────────

@@ -180,4 +180,14 @@ export function toPublicSSEMessage(msg: SSEMessage): PublicSSEMessage {
 }
 
 export interface ApiResponse<T> { data: T; }
-export interface ApiError { error: { code: string; message: string; details?: unknown } }
+
+export interface ApiErrorBody {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+export interface ApiErrorResponse {
+  error: ApiErrorBody;
+}
+/** @deprecated Use ApiErrorResponse instead */
+export interface ApiError { error: ApiErrorBody; }

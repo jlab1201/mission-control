@@ -77,8 +77,8 @@ export async function registerProject(
   if (!res.ok) {
     let detail = '';
     try {
-      const body = (await res.json()) as { error?: unknown };
-      detail = JSON.stringify(body.error);
+      const body = (await res.json()) as { error?: { code?: string; message?: string } };
+      detail = body.error?.message ?? body.error?.code ?? '';
     } catch { /* ignore */ }
     throw new Error(`registerProject failed (${res.status}): ${detail}`);
   }

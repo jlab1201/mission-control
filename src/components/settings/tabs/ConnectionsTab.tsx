@@ -121,7 +121,7 @@ export function ConnectionsTab({ onHostsChange }: Props) {
         )}
         {origin && (() => {
           const displayHostId = hostIdValid ? hostId : '<host-id>';
-          const downloadCmd = `curl -fSLO ${origin}/mc-reporter.mjs`;
+          const downloadCmd = `curl -fSLO ${origin}/mc-reporter.mjs && curl -fSLO ${origin}/mc-reporter.mjs.sha256 && echo "$(cat mc-reporter.mjs.sha256)  mc-reporter.mjs" | sha256sum -c - || { echo "integrity check failed"; exit 1; }`;
           const tokenForCopy = ingestToken ?? '<token>';
           const tokenForDisplay = ingestToken ? maskToken(ingestToken) : '<token>';
           const runCmdDisplay = `MC_REPORTER_TARGET_URL=${origin} \\\nMC_REPORTER_TOKEN=${tokenForDisplay} \\\nMC_REPORTER_HOST_ID=${displayHostId} \\\nnode mc-reporter.mjs`;
