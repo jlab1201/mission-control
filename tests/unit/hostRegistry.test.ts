@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import os from 'os';
 
 // ---------------------------------------------------------------------------
 // hostRegistry unit tests
@@ -139,7 +140,7 @@ describe('hostRegistry', () => {
       expect(isKnownHost('local')).toBe(true);
     });
 
-    it('handles missing MC_HOST_LABEL gracefully (undefined label)', () => {
+    it('falls back to os.hostname() when MC_HOST_LABEL is unset', () => {
       vi.stubEnv('MC_HOST_ID', 'bare-host');
       vi.stubEnv('MC_HOST_LABEL', '');
 
@@ -147,7 +148,7 @@ describe('hostRegistry', () => {
 
       const entry = getAllHosts().find((h) => h.hostId === 'bare-host');
       expect(entry).toBeDefined();
-      expect(entry?.hostLabel == null || entry?.hostLabel === '').toBe(true);
+      expect(entry?.hostLabel).toBe(os.hostname());
     });
   });
 

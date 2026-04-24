@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { listHosts, type KnownHost } from '@/lib/api/hosts';
 import { testHost as apiTestHost } from '@/lib/api/projects';
+import { getIngestStatus, revealIngestToken } from '@/lib/api/ingest';
 
 const HOST_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const HOSTS_POLL_MS = 5000;
@@ -32,9 +33,18 @@ export function ConnectionsTab({ onHostsChange }: Props) {
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    fetch('/api/ingest/status')
-      .then((r) => r.json() as Promise<{ ingestEnabled: boolean; token: string | null }>)
-      .then((d) => { setIngestEnabled(d.ingestEnabled); setIngestToken(d.token); })
+    // Fetch status (fingerprint only) then, if a token is configured, reveal the
+    // full token via the CSRF-protected POST endpoint so the copy-paste block works.
+    getIngestStatus()
+      .then(async (d) => {
+        setIngestEnabled(d.ingestEnabled);
+        if (d.hasToken) {
+          const token = await revealIngestToken();
+          setIngestToken(token);
+        } else {
+          setIngestToken(null);
+        }
+      })
       .catch(() => { setIngestEnabled(null); setIngestToken(null); });
     void loadHosts();
     const hostsTimer = setInterval(() => { void loadHosts(); }, HOSTS_POLL_MS);

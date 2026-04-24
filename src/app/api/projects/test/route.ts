@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { access, stat, constants } from 'fs/promises';
 import { getHost, hostStatus } from '@/server/ingest/hostRegistry';
 import { localHostId } from '@/server/watcher/watcherCore';
+import { assertPathInHome } from '@/server/workspace/pathGuard';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -41,6 +42,16 @@ export async function POST(request: NextRequest): Promise<Response> {
   const isLocal = hostId === 'local' || hostId === localId;
 
   if (isLocal) {
+    // Guard against path-traversal / arbitrary filesystem probing
+    try {
+      assertPathInHome(targetPath);
+    } catch (e: unknown) {
+      if ((e as NodeJS.ErrnoException).code === 'PATH_UNSAFE') {
+        return json({ ok: false, reason: 'path-unsafe' });
+      }
+      throw e;
+    }
+
     // Check: exists, is a directory, is readable
     try {
       const s = await stat(targetPath);

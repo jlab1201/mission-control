@@ -45,7 +45,7 @@ export async function loadSnapshot(projectPath: string): Promise<RegistrySnapsho
     const parsed = JSON.parse(raw) as RegistrySnapshot;
 
     // Minimal version guard — reject unknown future versions gracefully
-    if (parsed.version !== 1) {
+    if (parsed.version !== 1 && parsed.version !== 2) {
       console.warn(`[mission-control] Snapshot version ${String(parsed.version)} not supported; starting fresh.`);
       return null;
     }
