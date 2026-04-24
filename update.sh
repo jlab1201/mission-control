@@ -99,7 +99,31 @@ if [ -f .env ] && [ -f .env.example ]; then
   fi
 fi
 
-# --- Detect systemd unit and stop service before touching node_modules ---
+# --- Verify prerequisites BEFORE touching the running service ---
+# Source nvm if available — this is a common self-hosted setup where pnpm
+# lives under an nvm-managed Node version and isn't in the default PATH
+# for non-interactive shells.
+if ! command -v pnpm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOME/.nvm/nvm.sh"
+  nvm use default >/dev/null 2>&1 || true
+  # If default doesn't have pnpm, scan every installed Node version.
+  if ! command -v pnpm >/dev/null 2>&1; then
+    for pnpm_bin in "$HOME/.nvm/versions/node/"*/bin/pnpm; do
+      if [ -x "$pnpm_bin" ]; then
+        export PATH="$(dirname "$pnpm_bin"):$PATH"
+        break
+      fi
+    done
+  fi
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  die "pnpm not found in PATH. Install it (npm install -g pnpm) or activate an nvm Node version that has it, then re-run."
+fi
+
+# --- Detect systemd unit (but do NOT stop yet — wait until we're sure
+#     install/build will succeed) ---
 UNIT_FILE="$HOME/.config/systemd/user/mission-control.service"
 UNIT_NAME="mission-control.service"
 WAS_ACTIVE=0
@@ -114,9 +138,6 @@ if [ "${MC_SKIP_RESTART:-0}" != "1" ] && [ -f "$UNIT_FILE" ]; then
 fi
 
 # --- Reinstall deps ---
-if ! command -v pnpm >/dev/null 2>&1; then
-  die "pnpm not found in PATH. Cannot continue."
-fi
 info "Installing dependencies..."
 pnpm install
 
