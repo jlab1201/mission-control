@@ -1,7 +1,10 @@
 import { homedir } from 'os';
-import { cwd } from 'process';
-import { readdirSync, statSync, existsSync, readFileSync } from 'fs';
+import { readdirSync, statSync, existsSync } from 'fs';
 import { join, basename } from 'path';
+import {
+  encodeProjectPath,
+  resolveWatchedProjectPath,
+} from './watcherCore';
 
 export interface SessionLocation {
   sessionId: string;
@@ -11,71 +14,11 @@ export interface SessionLocation {
 }
 
 /**
- * Encode a POSIX path to Claude Code's project directory name format.
- * Claude Code replaces `/`, `_`, and `.` all with `-`. Leading `/` becomes a leading `-`.
- * Example: `/home/user/AI_Project/MyProject` → `-home-user-AI-Project-MyProject`
- */
-function encodeProjectPath(path: string): string {
-  return path.replace(/[/_.]/g, '-');
-}
-
-/**
- * Resolves the project path to watch. Resolution order (first wins):
- * 1. `~/.mission-control/config.json` → `watchPath` field
- * 2. `WATCH_PROJECT_PATH` environment variable
- * 3. `process.cwd()`
- *
- * Reading the config file on each call keeps the watcher reactive to path
- * changes written by the /api/workspace/watch endpoint without needing a
- * separate invalidation mechanism.
+ * Alias for resolveWatchedProjectPath() — kept for backward compatibility with
+ * callers that import getWatchedProjectPath from this module.
  */
 export function getWatchedProjectPath(): string {
-  // 1. Config file
-  const configPath = join(homedir(), '.mission-control', 'config.json');
-  if (existsSync(configPath)) {
-    try {
-      const raw = readFileSync(configPath, 'utf-8');
-      const parsed = JSON.parse(raw) as { watchPath?: string | null };
-      if (parsed.watchPath && typeof parsed.watchPath === 'string') {
-        return parsed.watchPath;
-      }
-    } catch {
-      // Fall through on parse errors
-    }
-  }
-
-  // 2. Environment variable
-  if (process.env.WATCH_PROJECT_PATH) {
-    return process.env.WATCH_PROJECT_PATH;
-  }
-
-  // 3. cwd — but don't watch Mission Control's own install dir.
-  const fallback = cwd();
-  if (looksLikeMissionControlRoot(fallback)) {
-    if (!selfWatchWarned) {
-      selfWatchWarned = true;
-      console.warn(
-        `[MC] WATCH_PROJECT_PATH is not set and cwd (${fallback}) is the ` +
-          `Mission Control install itself. Falling back to ${homedir()}. ` +
-          `Set WATCH_PROJECT_PATH in .env to watch a specific project.`,
-      );
-    }
-    return homedir();
-  }
-  return fallback;
-}
-
-let selfWatchWarned = false;
-
-function looksLikeMissionControlRoot(path: string): boolean {
-  try {
-    const pkgPath = join(path, 'package.json');
-    if (!existsSync(pkgPath) || !existsSync(join(path, 'team-kit'))) return false;
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { name?: string };
-    return pkg.name === 'mission-control';
-  } catch {
-    return false;
-  }
+  return resolveWatchedProjectPath();
 }
 
 export function findCurrentSession(): SessionLocation | null {

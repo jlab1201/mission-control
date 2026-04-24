@@ -7,6 +7,7 @@ import { SseStatusIndicator } from '@/components/ui/SseStatusIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { WorkspaceSettings } from '@/components/settings/WorkspaceSettings';
 import { HelpModal } from '@/components/features/HelpModal';
+import { Modal } from '@/components/ui/Modal';
 import { APP_NAME } from '@/lib/config/branding';
 import { useMissionStore, selectFilteredAgents } from '@/lib/store/missionStore';
 import { listProjects, deleteProject } from '@/lib/api/projects';
@@ -31,6 +32,8 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
   const [hoverTooltip, setHoverTooltip] = useState(false);
   const [projects, setProjects] = useState<RegisteredProjectRow[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -87,13 +90,22 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
     }
   };
 
-  const forgetProject = async (project: RegisteredProjectRow, e: React.MouseEvent) => {
+  const forgetProject = (project: RegisteredProjectRow, e: React.MouseEvent) => {
     e.stopPropagation();
+    setRemoveTarget({ id: project.id, name: project.name });
+  };
+
+  const confirmRemoveProject = async () => {
+    if (!removeTarget) return;
+    setRemoveBusy(true);
     try {
-      await deleteProject(project.id);
-      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      await deleteProject(removeTarget.id);
+      setProjects((prev) => prev.filter((p) => p.id !== removeTarget.id));
+      setRemoveTarget(null);
     } catch {
       // non-fatal
+    } finally {
+      setRemoveBusy(false);
     }
   };
 
@@ -408,6 +420,55 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
 
     <WorkspaceSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+    <Modal
+      open={!!removeTarget}
+      onClose={() => { if (!removeBusy) setRemoveTarget(null); }}
+      maxWidth="max-w-md"
+      aria-label="Remove registered project"
+    >
+      <div className="flex flex-col gap-3 p-5">
+        <h2
+          className="font-mono text-sm font-bold tracking-widest"
+          style={{ color: 'var(--foreground)', letterSpacing: '0.1em' }}
+        >
+          REMOVE PROJECT?
+        </h2>
+        <p className="font-mono text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          Remove <strong style={{ color: 'var(--foreground)' }}>{removeTarget?.name}</strong>{' '}
+          from registered projects? The files on disk are not touched — you can register it again later.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            onClick={() => setRemoveTarget(null)}
+            disabled={removeBusy}
+            className="font-mono text-xs px-3 py-1.5 rounded transition-colors"
+            style={{
+              background: 'var(--surface-elevated)',
+              border: '1px solid var(--border)',
+              color: 'var(--foreground)',
+              cursor: removeBusy ? 'not-allowed' : 'pointer',
+              opacity: removeBusy ? 0.6 : 1,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => { void confirmRemoveProject(); }}
+            disabled={removeBusy}
+            className="font-mono text-xs px-3 py-1.5 rounded transition-colors"
+            style={{
+              background: 'color-mix(in srgb, var(--danger) 15%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--danger) 40%, transparent)',
+              color: 'var(--danger)',
+              cursor: removeBusy ? 'not-allowed' : 'pointer',
+              opacity: removeBusy ? 0.6 : 1,
+            }}
+          >
+            {removeBusy ? 'Removing…' : 'Remove'}
+          </button>
+        </div>
+      </div>
+    </Modal>
     </>
   );
 }

@@ -16,16 +16,6 @@ export interface KnownHost {
   isLocal: boolean;
 }
 
-export interface HostStatus {
-  hostId: string;
-  status: 'live' | 'stale' | 'pending';
-  lastPostedAt?: string;
-  registeredAt: string;
-  agentCount: number;
-  activeAgentCount: number;
-  watchedProjectPath?: string;
-}
-
 async function expectOk(res: Response, context: string): Promise<void> {
   if (!res.ok) {
     let detail = '';
@@ -72,10 +62,4 @@ export async function disconnectHost(hostId: string): Promise<{ projectsRemoved:
   await expectOk(res, 'disconnectHost');
   const body = (await res.json()) as { ok: boolean; projectsRemoved: number };
   return { projectsRemoved: body.projectsRemoved };
-}
-
-export async function testHost(hostId: string): Promise<HostStatus> {
-  const res = await fetch(`/api/hosts/${encodeURIComponent(hostId)}/status`);
-  await expectOk(res, 'testHost');
-  return (await res.json()) as HostStatus;
 }

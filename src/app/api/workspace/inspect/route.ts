@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { inspectPath } from '@/server/workspace/inspect';
+import { assertPathInHome } from '@/server/workspace/pathGuard';
 import type { InspectResponse } from '@/types/workspace';
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +26,20 @@ export async function GET(
     );
   }
 
+  // Defense-in-depth: guard against path traversal at the route level before
+  // delegating to inspectPath, mirroring the pattern in watch/route.ts.
+  let safePath: string;
   try {
-    const result = await inspectPath(parsed.data.path);
+    safePath = assertPathInHome(parsed.data.path);
+  } catch {
+    return NextResponse.json(
+      { error: { code: 'PATH_UNSAFE', message: 'Invalid path' } },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await inspectPath(safePath);
     return NextResponse.json(result);
   } catch (err) {
     const e = err as Error & { code?: string };

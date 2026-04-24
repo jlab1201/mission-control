@@ -24,10 +24,6 @@ import { join } from 'path';
  * Claude Code replaces `/`, `_`, and `.` all with `-`. Leading `/` becomes a
  * leading `-`.
  * Example: `/home/user/AI_Project/MyProject` → `-home-user-AI-Project-MyProject`
- *
- * NOTE: The canonical copy lives in sessionLocator.ts (private). This copy is
- * intentionally duplicated here so watcherCore has zero dependency on
- * sessionLocator's other imports. Task 1.1 will consolidate.
  */
 export function encodeProjectPath(path: string): string {
   return path.replace(/[/_.]/g, '-');
@@ -46,9 +42,6 @@ export function encodeProjectPath(path: string): string {
  * Reading the config file on each call keeps the watcher reactive to path
  * changes written by the /api/workspace/watch endpoint without needing a
  * separate invalidation mechanism.
- *
- * This mirrors `getWatchedProjectPath()` in sessionLocator.ts and will replace
- * it once Task 1.1 updates consumers.
  */
 export function resolveWatchedProjectPath(): string {
   // 1. Config file

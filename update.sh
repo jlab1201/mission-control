@@ -99,6 +99,20 @@ if [ -f .env ] && [ -f .env.example ]; then
   fi
 fi
 
+# --- Detect systemd unit and stop service before touching node_modules ---
+UNIT_FILE="$HOME/.config/systemd/user/mission-control.service"
+UNIT_NAME="mission-control.service"
+WAS_ACTIVE=0
+RESTARTED=0
+
+if [ "${MC_SKIP_RESTART:-0}" != "1" ] && [ -f "$UNIT_FILE" ]; then
+  if systemctl --user is-active --quiet "$UNIT_NAME" 2>/dev/null; then
+    info "Stopping $UNIT_NAME before updating dependencies..."
+    systemctl --user stop "$UNIT_NAME" || warn "Could not stop $UNIT_NAME — proceeding anyway. You may need to restart it manually."
+    WAS_ACTIVE=1
+  fi
+fi
+
 # --- Reinstall deps ---
 if ! command -v pnpm >/dev/null 2>&1; then
   die "pnpm not found in PATH. Cannot continue."
@@ -106,10 +120,7 @@ fi
 info "Installing dependencies..."
 pnpm install
 
-# --- Detect how Mission Control is currently running and re-deploy ---
-UNIT_FILE="$HOME/.config/systemd/user/mission-control.service"
-RESTARTED=0
-
+# --- Build and restart ---
 if [ "${MC_SKIP_RESTART:-0}" != "1" ] && [ -f "$UNIT_FILE" ]; then
   if [ "${MC_SKIP_BUILD:-0}" = "1" ]; then
     info "MC_SKIP_BUILD=1 — skipping pnpm build."
@@ -117,12 +128,16 @@ if [ "${MC_SKIP_RESTART:-0}" != "1" ] && [ -f "$UNIT_FILE" ]; then
     info "Rebuilding for production..."
     pnpm build
   fi
-  info "Restarting systemd user service mission-control..."
-  systemctl --user daemon-reload
-  systemctl --user restart mission-control.service
-  RESTARTED=1
-  sleep 1
-  systemctl --user --no-pager --lines=0 status mission-control.service || true
+  if [ "$WAS_ACTIVE" = "1" ]; then
+    info "Starting $UNIT_NAME..."
+    systemctl --user daemon-reload
+    systemctl --user start "$UNIT_NAME" || warn "Could not start $UNIT_NAME — the update succeeded but the service did not come back up. Run: systemctl --user start $UNIT_NAME"
+    RESTARTED=1
+    sleep 1
+    systemctl --user --no-pager --lines=0 status "$UNIT_NAME" || true
+  else
+    systemctl --user daemon-reload
+  fi
 fi
 
 if [ "$RESTARTED" = "0" ] && [ "$ALREADY_LATEST" = "0" ]; then
