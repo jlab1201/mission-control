@@ -151,6 +151,13 @@ else
   bash scripts/setup.sh
 fi
 
+is_wsl() {
+  if [[ -r /proc/sys/kernel/osrelease ]] && grep -qi microsoft /proc/sys/kernel/osrelease; then
+    return 0
+  fi
+  return 1
+}
+
 # Prints a one-line reason and returns non-zero if systemd --user is unusable.
 # No side effects beyond the echo. Safe to call from `auto` mode.
 probe_systemd() {
@@ -161,6 +168,16 @@ probe_systemd() {
     echo "systemctl not found"; return 1
   fi
   if ! systemctl --user show-environment >/dev/null 2>&1; then
+    if is_wsl; then
+      warn "Detected WSL. To enable systemd --user services, add the following to /etc/wsl.conf:"
+      hint "  [boot]"
+      hint "  systemd=true"
+      hint ""
+      hint "Then run 'wsl --shutdown' from a Windows terminal and reopen this shell."
+      hint "Re-run the installer once systemd is active."
+      hint "Alternatively, set MC_AUTOSTART=none to skip autostart entirely."
+      hint ""
+    fi
     echo "no user systemd session (not logged in via logind, or running in a bare container)"
     return 1
   fi

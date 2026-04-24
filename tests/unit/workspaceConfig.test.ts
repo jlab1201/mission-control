@@ -36,7 +36,7 @@ afterEach(async () => {
 async function importReadConfig() {
   // Dynamic import after vi.resetModules() gives us a fresh module instance
   // where CONFIG_PATH is evaluated from the current env.
-  const mod = await import('../../src/server/workspace/config.ts');
+  const mod = await import('../../src/server/workspace/config');
   return mod.readConfig;
 }
 

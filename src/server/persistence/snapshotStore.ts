@@ -70,6 +70,7 @@ const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
  * Uses tmp-file + fs.rename for atomicity — no partial reads.
  */
 export function scheduleSave(projectPath: string, snapshot: RegistrySnapshot): void {
+  if (!projectPath) return;
   const existing = pendingTimers.get(projectPath);
   if (existing !== undefined) {
     clearTimeout(existing);
