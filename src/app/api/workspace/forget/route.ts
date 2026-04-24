@@ -58,6 +58,7 @@ export async function POST(
     const updated: WorkspaceConfig = {
       watchPath: current.watchPath,
       recentPaths: current.recentPaths.filter((p) => p !== safePath),
+      registeredProjects: current.registeredProjects,
     };
     await writeConfig(updated);
 

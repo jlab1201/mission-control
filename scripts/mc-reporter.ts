@@ -578,6 +578,10 @@ async function postToServer(mode: PostMode, timeoutMs?: number): Promise<boolean
     clearTimeout(timer);
 
     if (!res.ok) {
+      if (res.status === 410) {
+        log('INFO', 'host disconnected by server — exiting');
+        process.exit(0);
+      }
       log('WARN', `POST /api/ingest returned ${res.status} ${res.statusText}`);
       return false;
     }
@@ -645,7 +649,14 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // Normal mode: poll until session appears, then start tailing
+  // Send an initial heartbeat snapshot so MC registers this host immediately,
+  // before a Claude Code session exists to tail. The snapshot carries empty
+  // agents/events — MC uses it purely for host-registry discovery.
+  await postWithRetry('snapshot');
+
+  // Normal mode: poll until session appears, then start tailing.
+  // Keep re-posting a heartbeat every ~15s while waiting so the host stays
+  // "live" in MC's registry (lastPostedAt fresher than 60s).
   let pollWaitCount = 0;
   while (!sessionFound && !shuttingDown) {
     const session = findSessionFiles(watchedPath);
@@ -655,15 +666,18 @@ async function main(): Promise<void> {
       break;
     }
     if (pollWaitCount === 0) {
-      log('INFO', 'no active session found — waiting...');
+      log('INFO', 'no active session found — waiting (heartbeat active)...');
     }
     pollWaitCount++;
+    if (pollWaitCount % 3 === 0) {
+      await postToServer('snapshot');
+    }
     await sleep(5000);
   }
 
   if (shuttingDown) return;
 
-  // Send initial snapshot immediately
+  // Session found — post a snapshot now that we have real agents to report.
   await postWithRetry('snapshot');
 
   // Schedule periodic tailing

@@ -50,6 +50,7 @@ export async function POST(
     const updated: WorkspaceConfig = {
       watchPath: safePath,
       recentPaths: prependRecentPath(current.recentPaths, safePath),
+      registeredProjects: current.registeredProjects,
     };
     await writeConfig(updated);
 

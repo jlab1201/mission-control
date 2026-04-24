@@ -2,7 +2,8 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
-import type { WorkspaceConfig } from '@/types/workspace';
+import { randomUUID } from 'crypto';
+import type { WorkspaceConfig, RegisteredProject } from '@/types/workspace';
 
 const MAX_RECENT_PATHS = 5;
 
@@ -16,11 +17,14 @@ export const CONFIG_PATH =
 const DEFAULT_CONFIG: WorkspaceConfig = {
   watchPath: null,
   recentPaths: [],
+  registeredProjects: [],
 };
 
 /**
  * Reads the persisted WorkspaceConfig from CONFIG_PATH.
  * Returns a default config when the file does not exist yet — first-run safe.
+ * If `registeredProjects` is missing from the persisted JSON, initialises it to []
+ * and immediately persists the updated config.
  */
 export async function readConfig(): Promise<WorkspaceConfig> {
   if (!existsSync(CONFIG_PATH)) {
@@ -29,12 +33,20 @@ export async function readConfig(): Promise<WorkspaceConfig> {
   try {
     const raw = await fs.readFile(CONFIG_PATH, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<WorkspaceConfig>;
-    return {
+    const needsMigration = !Array.isArray(parsed.registeredProjects);
+    const cfg: WorkspaceConfig = {
       watchPath: parsed.watchPath ?? null,
       recentPaths: Array.isArray(parsed.recentPaths)
         ? parsed.recentPaths.slice(0, MAX_RECENT_PATHS)
         : [],
+      registeredProjects: Array.isArray(parsed.registeredProjects)
+        ? (parsed.registeredProjects as RegisteredProject[])
+        : [],
     };
+    if (needsMigration) {
+      await writeConfig(cfg);
+    }
+    return cfg;
   } catch {
     // Corrupted file — return defaults rather than hard-crashing
     return { ...DEFAULT_CONFIG };
@@ -52,6 +64,7 @@ export async function writeConfig(cfg: WorkspaceConfig): Promise<void> {
   const safe: WorkspaceConfig = {
     watchPath: cfg.watchPath,
     recentPaths: cfg.recentPaths.slice(0, MAX_RECENT_PATHS),
+    registeredProjects: cfg.registeredProjects,
   };
 
   const tmpPath = CONFIG_PATH + '.tmp';
@@ -66,4 +79,61 @@ export async function writeConfig(cfg: WorkspaceConfig): Promise<void> {
 export function prependRecentPath(existing: string[], newPath: string): string[] {
   const deduped = [newPath, ...existing.filter((p) => p !== newPath)];
   return deduped.slice(0, MAX_RECENT_PATHS);
+}
+
+// ---------------------------------------------------------------------------
+// Registered Project helpers
+// ---------------------------------------------------------------------------
+
+/** Returns all registered projects from the persisted config. */
+export async function listRegisteredProjects(): Promise<RegisteredProject[]> {
+  const cfg = await readConfig();
+  return cfg.registeredProjects;
+}
+
+/**
+ * Adds (or idempotently updates) a registered project.
+ * Idempotent on `(hostId, path)`: if an entry with the same host+path already
+ * exists the `name` is updated in-place and the existing entry is returned.
+ * Otherwise a new entry is created with a fresh UUID.
+ */
+export async function addRegisteredProject(input: {
+  name: string;
+  hostId: string;
+  path: string;
+}): Promise<RegisteredProject> {
+  const cfg = await readConfig();
+  const existing = cfg.registeredProjects.find(
+    (p) => p.hostId === input.hostId && p.path === input.path,
+  );
+
+  if (existing) {
+    existing.name = input.name;
+    await writeConfig(cfg);
+    return existing;
+  }
+
+  const entry: RegisteredProject = {
+    id: randomUUID(),
+    name: input.name,
+    path: input.path,
+    hostId: input.hostId,
+    registeredAt: new Date().toISOString(),
+  };
+  cfg.registeredProjects.push(entry);
+  await writeConfig(cfg);
+  return entry;
+}
+
+/**
+ * Removes a registered project by id.
+ * Returns true when the entry was found and removed; false when not found.
+ */
+export async function removeRegisteredProject(id: string): Promise<boolean> {
+  const cfg = await readConfig();
+  const before = cfg.registeredProjects.length;
+  cfg.registeredProjects = cfg.registeredProjects.filter((p) => p.id !== id);
+  if (cfg.registeredProjects.length === before) return false;
+  await writeConfig(cfg);
+  return true;
 }

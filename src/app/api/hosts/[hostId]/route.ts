@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { forgetHost, isKnownHost } from '@/server/ingest/hostRegistry';
+import { forgetHost, isKnownHost, markHostDisconnected } from '@/server/ingest/hostRegistry';
+import { listRegisteredProjects, removeRegisteredProject } from '@/server/workspace/config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -25,15 +26,29 @@ export async function DELETE(
     return errJson(400, 'invalid-host-id');
   }
 
+  if (hostId === 'local') {
+    return errJson(400, 'cannot-disconnect-local');
+  }
+
   if (!isKnownHost(hostId)) {
     return errJson(404, 'not-found');
   }
 
-  const removed = forgetHost(hostId);
-  if (!removed) {
-    // forgetHost returns false only for local host
-    return errJson(409, 'cannot-forget-local');
+  // Remove all registered projects for this host
+  const projects = await listRegisteredProjects();
+  const matching = projects.filter((p) => p.hostId === hostId);
+  for (const p of matching) {
+    await removeRegisteredProject(p.id);
   }
 
-  return new Response(null, { status: 204 });
+  // Signal the host's reporter to exit on next ingest
+  markHostDisconnected(hostId);
+
+  // Remove from registry
+  forgetHost(hostId);
+
+  return new Response(
+    JSON.stringify({ ok: true, projectsRemoved: matching.length }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
 }

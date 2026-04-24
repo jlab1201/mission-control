@@ -1,9 +1,25 @@
+import { hostname as osHostname } from 'os';
 import { localHostId } from '@/server/watcher/watcherCore';
 import type { HostInfo } from '@/types';
 
 export type { HostInfo };
 
 const registry = new Map<string, HostInfo>();
+
+// ── Disconnect signals ────────────────────────────────────────────────────────
+
+const disconnectedHostIds = new Set<string>();
+
+export function markHostDisconnected(hostId: string): void {
+  disconnectedHostIds.add(hostId);
+}
+
+/** Consumes the signal (single-use). Returns true if the signal was present. */
+export function consumeDisconnectSignal(hostId: string): boolean {
+  if (!disconnectedHostIds.has(hostId)) return false;
+  disconnectedHostIds.delete(hostId);
+  return true;
+}
 
 // ── Derived status ────────────────────────────────────────────────────────────
 
@@ -110,17 +126,25 @@ export function isKnownHost(hostId: string): boolean {
 
 export function seedLocalHost(): void {
   const hostId = process.env.MC_HOST_ID || 'local';
-  const hostLabel = process.env.MC_HOST_LABEL || undefined;
-  // Only seed if not already registered — avoids clobbering richer hydrated data
-  if (!registry.has(hostId)) {
+  // Prefer explicit env label, then fall back to OS hostname
+  const hostLabel =
+    (process.env.MC_HOST_LABEL && process.env.MC_HOST_LABEL.trim() !== '')
+      ? process.env.MC_HOST_LABEL
+      : osHostname();
+
+  const existing = registry.get(hostId);
+  if (!existing) {
     const now = new Date().toISOString();
     registry.set(hostId, {
       hostId,
-      hostLabel: hostLabel && hostLabel.trim() !== '' ? hostLabel : undefined,
+      hostLabel,
       registeredAt: now,
       lastPostedAt: undefined,
       manuallyAdded: false,
     });
+  } else if (!existing.hostLabel) {
+    // Back-fill label on existing record that lacks one
+    existing.hostLabel = hostLabel;
   }
 }
 

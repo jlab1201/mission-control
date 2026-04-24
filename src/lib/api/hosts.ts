@@ -62,11 +62,16 @@ export async function registerHost(input: {
   return body.host;
 }
 
-export async function forgetHost(hostId: string): Promise<void> {
+export async function disconnectHost(hostId: string): Promise<{ projectsRemoved: number }> {
   const res = await fetch(`/api/hosts/${encodeURIComponent(hostId)}`, {
     method: 'DELETE',
   });
-  await expectOk(res, 'forgetHost');
+  // 404 = host already gone (e.g. server restarted since the UI loaded).
+  // Treat as a no-op success so the UI can refresh instead of erroring.
+  if (res.status === 404) return { projectsRemoved: 0 };
+  await expectOk(res, 'disconnectHost');
+  const body = (await res.json()) as { ok: boolean; projectsRemoved: number };
+  return { projectsRemoved: body.projectsRemoved };
 }
 
 export async function testHost(hostId: string): Promise<HostStatus> {

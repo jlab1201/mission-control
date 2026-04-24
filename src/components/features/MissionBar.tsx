@@ -9,8 +9,9 @@ import { WorkspaceSettings } from '@/components/settings/WorkspaceSettings';
 import { HelpModal } from '@/components/features/HelpModal';
 import { APP_NAME } from '@/lib/config/branding';
 import { useMissionStore, selectFilteredAgents } from '@/lib/store/missionStore';
+import { listProjects, deleteProject } from '@/lib/api/projects';
 import type { MissionSnapshot, Task } from '@/types';
-import type { WorkspaceConfig } from '@/types/workspace';
+import type { RegisteredProjectRow } from '@/types/workspace';
 
 interface MissionBarProps {
   mission: MissionSnapshot['mission'] | null;
@@ -19,28 +20,40 @@ interface MissionBarProps {
 
 export function MissionBar({ mission, tasks }: MissionBarProps) {
   const agents = useMissionStore(useShallow(selectFilteredAgents));
+  const { selectedHostId, setSelectedHostId } = useMissionStore(
+    useShallow((s) => ({ selectedHostId: s.selectedHostId, setSelectedHostId: s.setSelectedHostId })),
+  );
   const mainAgent = agents.find((a) => a.id === 'main');
   const model = mission?.model ?? mainAgent?.model ?? 'unknown';
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const [recentPaths, setRecentPaths] = useState<string[]>([]);
+  const [hoverTooltip, setHoverTooltip] = useState(false);
+  const [projects, setProjects] = useState<RegisteredProjectRow[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Derive the button label
   const projectPath = mission?.cwd ?? '';
-  const projectLabel = projectPath
-    ? (projectPath.split('/').filter(Boolean).pop() ?? projectPath)
-    : 'no workspace';
 
-  // Fetch recent paths whenever the popover opens or the active project changes
+  let projectLabel = 'no workspace';
+  if (selectedHostId) {
+    const remoteProject = projects.find((p) => p.hostId === selectedHostId);
+    projectLabel = remoteProject?.name ?? selectedHostId;
+  } else if (projectPath) {
+    projectLabel = projectPath.split('/').filter(Boolean).pop() ?? projectPath;
+  }
+
+  const hasProjects = projects.length > 0;
+
+  // Fetch on mount + poll every 5s so hasProjects/dropdown are correct before first click
   useEffect(() => {
-    if (!projectMenuOpen) return;
-    fetch('/api/workspace/config')
-      .then((r) => r.json() as Promise<WorkspaceConfig>)
-      .then((cfg) => setRecentPaths(cfg.recentPaths ?? []))
-      .catch(() => setRecentPaths([]));
-  }, [projectMenuOpen, projectPath]);
+    const load = () => { listProjects().then(({ projects: p }) => setProjects(p)).catch(() => {}); };
+    load();
+    pollRef.current = setInterval(load, 5000);
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+  }, []);
 
   // Close popover on click-outside
   useEffect(() => {
@@ -54,36 +67,44 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
     return () => document.removeEventListener('mousedown', onClick);
   }, [projectMenuOpen]);
 
-  const switchToProject = async (path: string) => {
-    if (path === projectPath || switching) return;
-    setSwitching(path);
+  const switchToProject = async (project: RegisteredProjectRow) => {
+    if (switching) return;
+    setSwitching(project.id);
     try {
-      await fetch('/api/workspace/watch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      });
-      // The backend broadcasts a fresh snapshot; the store will hydrate automatically.
+      if (project.isLocal) {
+        setSelectedHostId(null);
+        await fetch('/api/workspace/watch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: project.path }),
+        });
+      } else {
+        setSelectedHostId(project.hostId);
+      }
     } finally {
       setSwitching(null);
       setProjectMenuOpen(false);
     }
   };
 
-  const forgetProject = async (path: string, e: React.MouseEvent) => {
+  const forgetProject = async (project: RegisteredProjectRow, e: React.MouseEvent) => {
     e.stopPropagation();
-    // Active project cannot be removed (backend also enforces this)
-    if (path === projectPath) return;
     try {
-      await fetch('/api/workspace/forget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      });
-      setRecentPaths((prev) => prev.filter((p) => p !== path));
+      await deleteProject(project.id);
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
     } catch {
-      // Swallow — user can retry
+      // non-fatal
     }
+  };
+
+  const isActiveProject = (p: RegisteredProjectRow): boolean => {
+    if (p.isLocal) return selectedHostId == null && mission?.cwd === p.path;
+    return selectedHostId === p.hostId;
+  };
+
+  const handleButtonClick = () => {
+    if (!hasProjects) return;
+    setProjectMenuOpen((v) => !v);
   };
 
   const totalTasks = tasks.length;
@@ -135,28 +156,57 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
         </div>
         <div ref={projectMenuRef} style={{ position: 'relative' }}>
           <button
-            onClick={() => setProjectMenuOpen((v) => !v)}
+            onClick={handleButtonClick}
+            onMouseEnter={() => { if (!hasProjects) setHoverTooltip(true); }}
+            onMouseLeave={() => setHoverTooltip(false)}
             className="font-mono flex items-center gap-2 px-3 py-1.5 rounded-md transition-all duration-150"
             style={{
-              color: projectPath ? 'var(--accent-primary)' : 'var(--text-muted)',
-              backgroundColor: projectPath
+              color: projectPath || selectedHostId ? 'var(--accent-primary)' : 'var(--text-muted)',
+              backgroundColor: projectPath || selectedHostId
                 ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)'
                 : 'transparent',
-              border: `1px solid ${projectPath ? 'color-mix(in srgb, var(--accent-primary) 28%, transparent)' : 'var(--border)'}`,
+              border: `1px solid ${projectPath || selectedHostId ? 'color-mix(in srgb, var(--accent-primary) 28%, transparent)' : 'var(--border)'}`,
               fontSize: '14px',
               fontWeight: 600,
               letterSpacing: '0.04em',
+              cursor: hasProjects ? 'pointer' : 'default',
             }}
-            title={projectPath ? `Watching: ${projectPath}` : 'No workspace configured'}
+            title={projectPath ? `Watching: ${projectPath}` : selectedHostId ? `Remote: ${selectedHostId}` : 'No workspace configured'}
             aria-label="Current workspace — click to switch"
             aria-expanded={projectMenuOpen}
           >
             <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>›</span>
             <span>{projectLabel}</span>
-            <ChevronDown size={12} strokeWidth={2} style={{ opacity: 0.6 }} />
+            {hasProjects && <ChevronDown size={12} strokeWidth={2} style={{ opacity: 0.6 }} />}
           </button>
 
-          {projectMenuOpen && (
+          {/* Tooltip: shown only when no projects and hovering */}
+          {hoverTooltip && !hasProjects && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                left: 0,
+                zIndex: 60,
+                padding: '6px 10px',
+                borderRadius: '6px',
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--border)',
+                boxShadow: '0 4px 12px -2px color-mix(in srgb, var(--foreground) 20%, transparent)',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+              }}
+            >
+              <span
+                className="font-mono text-[11px]"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Register a project under Settings
+              </span>
+            </div>
+          )}
+
+          {projectMenuOpen && hasProjects && (
             <div
               className="absolute mt-2 rounded-lg overflow-hidden"
               style={{
@@ -171,100 +221,93 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
               }}
               role="menu"
             >
-              {recentPaths.length === 0 ? (
-                <div
-                  className="px-3 py-2 font-mono text-xs"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  No recent projects
-                </div>
-              ) : (
-                recentPaths.map((p) => {
-                  const isActive = p === projectPath;
-                  const isBusy = switching === p;
-                  return (
-                    <div
-                      key={p}
-                      className="flex items-center gap-1 rounded-md transition-all duration-150"
+              {projects.map((p) => {
+                const isActive = isActiveProject(p);
+                const isBusy = switching === p.id;
+                const hostSuffix = p.hostLabel ? ` · ${p.hostLabel}` : (!p.isLocal ? ` · ${p.hostId}` : '');
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-1 rounded-md transition-all duration-150"
+                    style={{
+                      backgroundColor: isActive
+                        ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)'
+                        : 'transparent',
+                    }}
+                  >
+                    <button
+                      onClick={() => { void switchToProject(p); }}
+                      disabled={isActive || isBusy}
+                      className="flex-1 text-left flex items-center gap-2 px-3 py-2 font-mono transition-all duration-150"
                       style={{
-                        backgroundColor: isActive
-                          ? 'color-mix(in srgb, var(--accent-primary) 10%, transparent)'
-                          : 'transparent',
+                        color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                        cursor: isActive ? 'default' : 'pointer',
+                        fontSize: '12px',
+                        background: 'transparent',
                       }}
+                      role="menuitem"
                     >
-                      <button
-                        onClick={() => switchToProject(p)}
-                        disabled={isActive || isBusy}
-                        className="flex-1 text-left flex items-center gap-2 px-3 py-2 font-mono transition-all duration-150"
+                      {/* Active dot */}
+                      <span
                         style={{
-                          color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                          cursor: isActive ? 'default' : 'pointer',
-                          fontSize: '12px',
-                          background: 'transparent',
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: isActive ? 'var(--success)' : 'transparent',
+                          border: isActive ? 'none' : '1px solid var(--border)',
+                          flexShrink: 0,
                         }}
-                        role="menuitem"
-                      >
+                      />
+                      {/* Name + host suffix */}
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <strong>{p.name}</strong>
+                        {hostSuffix && (
+                          <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{hostSuffix}</span>
+                        )}
+                      </span>
+                      {/* Status dot for non-live remote */}
+                      {!p.isLocal && p.hostStatus !== 'live' && (
                         <span
                           style={{
                             width: '6px',
                             height: '6px',
                             borderRadius: '50%',
-                            backgroundColor: isActive ? 'var(--success)' : 'transparent',
-                            border: isActive ? 'none' : `1px solid var(--border)`,
+                            backgroundColor: p.hostStatus === 'stale' ? 'var(--warning, #d97706)' : 'var(--text-muted)',
                             flexShrink: 0,
                           }}
+                          title={p.hostStatus}
                         />
-                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {p.split('/').filter(Boolean).pop() ?? p}
-                        </span>
-                        {isBusy && <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>…</span>}
-                      </button>
-                      {!isActive && (
-                        <button
-                          onClick={(e) => forgetProject(p, e)}
-                          className="flex items-center justify-center rounded transition-colors mr-1"
-                          style={{
-                            width: '22px',
-                            height: '22px',
-                            color: 'var(--text-muted)',
-                            background: 'transparent',
-                            flexShrink: 0,
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.color = 'var(--danger)';
-                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'color-mix(in srgb, var(--danger) 10%, transparent)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
-                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
-                          }}
-                          title="Remove from recent projects"
-                          aria-label={`Forget ${p}`}
-                        >
-                          <X size={12} strokeWidth={2} />
-                        </button>
                       )}
-                    </div>
-                  );
-                })
-              )}
-              <div style={{ height: '1px', backgroundColor: 'var(--border)', margin: '0.25rem 0' }} />
-              <button
-                onClick={() => {
-                  setProjectMenuOpen(false);
-                  setSettingsOpen(true);
-                }}
-                className="w-full text-left px-3 py-2 rounded-md font-mono transition-all duration-150"
-                style={{
-                  color: 'var(--text-secondary)',
-                  fontSize: '11px',
-                  letterSpacing: '0.05em',
-                  background: 'transparent',
-                }}
-                role="menuitem"
-              >
-                Manage workspaces…
-              </button>
+                      {isBusy && <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>…</span>}
+                    </button>
+                    {!isActive && (
+                      <button
+                        onClick={(e) => { void forgetProject(p, e); }}
+                        className="flex items-center justify-center rounded transition-colors mr-1"
+                        style={{
+                          width: '22px',
+                          height: '22px',
+                          color: 'var(--text-muted)',
+                          background: 'transparent',
+                          flexShrink: 0,
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.color = 'var(--danger)';
+                          (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'color-mix(in srgb, var(--danger) 10%, transparent)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+                          (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                        }}
+                        title="Remove project"
+                        aria-label={`Remove ${p.name}`}
+                      >
+                        <X size={12} strokeWidth={2} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -414,4 +457,3 @@ function Separator() {
     />
   );
 }
-

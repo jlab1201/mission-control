@@ -3,6 +3,7 @@ import { verifyBearer } from '@/server/ingest/auth';
 import { acquire } from '@/server/ingest/rateLimit';
 import { IngestPayloadSchema } from '@/server/ingest/schema';
 import { applyIngest } from '@/server/ingest/ingestHandler';
+import { consumeDisconnectSignal } from '@/server/ingest/hostRegistry';
 import { MAX_INGEST_BODY_BYTES } from '@/lib/config/runtime';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,11 @@ export async function POST(request: NextRequest): Promise<Response> {
   // Validate
   const parsed = IngestPayloadSchema.safeParse(raw);
   if (!parsed.success) return errJson(400, 'validation', parsed.error.issues);
+
+  // Disconnect signal — single-use; tells a recently-deleted host's reporter to exit
+  if (consumeDisconnectSignal(parsed.data.hostId)) {
+    return errJson(410, 'host-disconnected');
+  }
 
   // Apply — wrapped internally in registry.applyBatch
   const result = applyIngest(

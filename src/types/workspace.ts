@@ -74,13 +74,39 @@ export interface InstallResponse {
 /**
  * Persisted configuration stored at `~/.mission-control/config.json`.
  *
- * `watchPath`    — The absolute path currently being watched by the JSONL watcher.
- *                  `null` when no watch is active.
- * `recentPaths`  — Last N paths used (capped at 5, most-recent first).
+ * `watchPath`          — The absolute path currently being watched by the JSONL watcher.
+ *                        `null` when no watch is active.
+ * `recentPaths`        — Last N paths used (capped at 5, most-recent first).
+ * `registeredProjects` — User-registered projects, keyed by (hostId, path).
  */
 export interface WorkspaceConfig {
   watchPath: string | null;
   recentPaths: string[]; // max length 5
+  registeredProjects: RegisteredProject[];
+}
+
+// ---------------------------------------------------------------------------
+// Registered Projects
+// ---------------------------------------------------------------------------
+
+/**
+ * A user-registered project stored in the persisted config.
+ */
+export interface RegisteredProject {
+  id: string;           // uuid v4
+  name: string;         // user-provided, 1–128 chars after trim
+  path: string;         // absolute
+  hostId: string;       // 'local' or a known host id
+  registeredAt: string; // ISO timestamp
+}
+
+/**
+ * Registered project enriched with live host-status for API responses.
+ */
+export interface RegisteredProjectRow extends RegisteredProject {
+  hostStatus: 'live' | 'stale' | 'pending' | 'unknown';
+  hostLabel?: string;
+  isLocal: boolean;
 }
 
 /**

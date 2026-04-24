@@ -2,18 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import type { WorkspaceConfig } from '@/types/workspace';
 import { listHosts, type KnownHost } from '@/lib/api/hosts';
 import { WorkspaceTab } from '@/components/settings/tabs/WorkspaceTab';
 import { ConnectionsTab } from '@/components/settings/tabs/ConnectionsTab';
 
 type Tab = 'workspace' | 'hosts';
-
-async function fetchConfig(): Promise<WorkspaceConfig> {
-  const res = await fetch('/api/workspace/config');
-  if (!res.ok) throw new Error('Failed to load config');
-  return (await res.json()) as WorkspaceConfig;
-}
 
 // ---------------------------------------------------------------------------
 // WorkspaceSettings
@@ -26,18 +19,7 @@ interface WorkspaceSettingsProps {
 
 export function WorkspaceSettings({ open, onClose }: WorkspaceSettingsProps) {
   const [tab, setTab] = useState<Tab>('workspace');
-  const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   const [hosts, setHosts] = useState<KnownHost[]>([]);
-
-  // Load workspace config on open
-  useEffect(() => {
-    if (!open) return;
-    fetchConfig()
-      .then(setConfig)
-      .catch(() => {
-        // Non-fatal — WorkspaceTab falls back gracefully to null config
-      });
-  }, [open]);
 
   // Pre-fetch hosts for WorkspaceTab host dropdown (best-effort; tab mounts its own copy too)
   const refreshHosts = useCallback(() => {
@@ -153,7 +135,6 @@ export function WorkspaceSettings({ open, onClose }: WorkspaceSettingsProps) {
       >
         {tab === 'workspace' && (
           <WorkspaceTab
-            initialConfig={config}
             hosts={hosts}
             onClose={onClose}
           />
