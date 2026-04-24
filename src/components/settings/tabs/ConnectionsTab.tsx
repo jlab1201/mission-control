@@ -22,13 +22,10 @@ export function ConnectionsTab({ onHostsChange }: Props) {
   const [hostTestBusy, setHostTestBusy] = useState(false);
   const [hostTestResult, setHostTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  const [hosts, setHosts] = useState<KnownHost[]>([]);
-
   const loadHosts = useCallback(async () => {
     try {
       const h = await listHosts();
       const sorted = [...h].sort((a, b) => (a.isLocal ? -1 : b.isLocal ? 1 : 0));
-      setHosts(sorted);
       onHostsChange?.(sorted);
     } catch { /* non-fatal */ }
   }, [onHostsChange]);
