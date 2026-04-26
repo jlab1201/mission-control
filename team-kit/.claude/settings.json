@@ -1,9 +1,23 @@
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "ENABLE_SECURITY_REMINDER": "1"
   },
   "preferences": {
     "teammateMode": "tmux"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PROJECT_DIR}/.claude/hooks/security_reminder_hook.py"
+          }
+        ]
+      }
+    ]
   },
   "permissions": {
     "allow": [

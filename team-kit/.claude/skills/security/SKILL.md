@@ -5,6 +5,18 @@ description: "Security audit checklist and vulnerability patterns for web applic
 
 # Security Audit Guide
 
+## Real-Time Companion: PreToolUse Hook
+
+A `security_reminder_hook.py` runs on every `Edit | Write | MultiEdit` and **blocks** the call if the new content matches a known-dangerous pattern (XSS, code-injection, shell-injection, unsafe deserialization, GitHub Actions workflow injection). The detection rules live in `.claude/hooks/security_reminder_hook.py` and are adapted from Anthropic's `security-guidance` plugin.
+
+When auditing, **start by reading the hook's audit log**:
+
+```
+.claude/agent-memory/security-engineer/security-warnings.log
+```
+
+Each line is `<timestamp>\t<session_id>\t<rule_name>\t<file_path>` — a record of every blocked edit attempt across all sessions on this project. That log tells you which files were touched in patterns the hook caught, so you can verify the eventual code didn't sneak the issue back in via a workaround. Pair this with the audit checklist below for full coverage.
+
 ## Quick Vulnerability Scan (Grep Patterns)
 
 Run these FIRST — they're cheap (context-friendly) and catch common issues:

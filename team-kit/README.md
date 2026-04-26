@@ -17,7 +17,13 @@ team-kit/
 │   │                    frontend, devops, security, mcp-builder, web-testing,
 │   │                    playwright-cli, web-builder, theme-factory, integrations,
 │   │                    skill-dev)
-│   ├── settings.json    Permissions and agent-team flag (portable, no local paths)
+│   ├── hooks/           PreToolUse security_reminder_hook.py — adapted from
+│   │                    Anthropic's security-guidance plugin. Blocks file edits
+│   │                    that introduce common XSS, code-injection, shell-injection,
+│   │                    unsafe-deserialization, and CI-workflow-injection patterns.
+│   │                    See skills/security/SKILL.md for the full rule list and
+│   │                    the audit log location.
+│   ├── settings.json    Permissions, agent-team flag, and the security hook wiring
 │   └── agent-memory/    Empty — specialists populate this as they work
 ├── CLAUDE.md            Team config + context policy. Stack & File Ownership start
 │                        as placeholders; the Team Lead fills them in during planning.
