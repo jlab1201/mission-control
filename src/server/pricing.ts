@@ -2,23 +2,35 @@ import type { RawUsage } from './watcher/jsonlParser';
 
 /**
  * Per-model pricing in USD per 1M tokens.
+ * Source: https://platform.claude.com/docs/en/docs/about-claude/pricing
+ * Verified: 2026-04-26.
+ *
  * Unknown models → 0 cost (tokens still counted).
- * Rates updated to public Anthropic pricing as of 2026.
  */
 interface ModelRate {
   input: number;
-  cacheWrite: number;
+  cacheWrite: number; // 5-minute cache write
   cacheRead: number;
   output: number;
 }
 
-const OPUS_RATE: ModelRate = {
+// Opus 4 / 4.1 — original pricing tier
+const OPUS_4_RATE: ModelRate = {
   input: 15,
   cacheWrite: 18.75,
   cacheRead: 1.5,
   output: 75,
 };
 
+// Opus 4.5 / 4.6 / 4.7 — 3× cheaper than Opus 4
+const OPUS_45_RATE: ModelRate = {
+  input: 5,
+  cacheWrite: 6.25,
+  cacheRead: 0.5,
+  output: 25,
+};
+
+// Sonnet 4 / 4.5 / 4.6 (and 3.7) — all share the same rate
 const SONNET_RATE: ModelRate = {
   input: 3,
   cacheWrite: 3.75,
@@ -26,19 +38,39 @@ const SONNET_RATE: ModelRate = {
   output: 15,
 };
 
-const HAIKU_RATE: ModelRate = {
+// Haiku 4.5
+const HAIKU_45_RATE: ModelRate = {
   input: 1,
   cacheWrite: 1.25,
-  cacheRead: 0.08,
+  cacheRead: 0.1,
   output: 5,
+};
+
+// Haiku 3.5 (legacy)
+const HAIKU_35_RATE: ModelRate = {
+  input: 0.8,
+  cacheWrite: 1.0,
+  cacheRead: 0.08,
+  output: 4,
 };
 
 function rateFor(model?: string): ModelRate | null {
   if (!model) return null;
   const m = model.toLowerCase();
-  if (m.includes('opus')) return OPUS_RATE;
+
+  if (m.includes('opus')) {
+    // Opus 4.5+ uses the new lower rate; Opus 4 / 4.1 / 3 use the original.
+    if (/opus-4-([5-9]|1\d)/.test(m) || /opus-[5-9]/.test(m)) return OPUS_45_RATE;
+    return OPUS_4_RATE;
+  }
+
   if (m.includes('sonnet')) return SONNET_RATE;
-  if (m.includes('haiku')) return HAIKU_RATE;
+
+  if (m.includes('haiku')) {
+    if (/haiku-3-5/.test(m)) return HAIKU_35_RATE;
+    return HAIKU_45_RATE;
+  }
+
   return null;
 }
 

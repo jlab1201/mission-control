@@ -1,13 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { vi } from 'vitest';
-import {
-  formatUptime,
-  formatRelativeTime,
-  getAgentColor,
-  getContextHealthColor,
-  getStatusColor,
-  cn,
-} from '@/lib/utils';
+import { formatUptime, formatRelativeTime, shortRole, cn } from '@/lib/utils';
 
 describe('formatUptime', () => {
   it('shows seconds for under a minute', () => {
@@ -67,72 +60,21 @@ describe('formatRelativeTime', () => {
   });
 });
 
-describe('getAgentColor', () => {
-  it('returns correct color for purple', () => {
-    expect(getAgentColor('purple')).toBe('#a855f7');
+describe('shortRole', () => {
+  it('strips -dev suffix', () => {
+    expect(shortRole('frontend-dev')).toBe('frontend');
   });
-  it('returns correct color for blue', () => {
-    expect(getAgentColor('blue')).toBe('#3b82f6');
+  it('strips -engineer suffix', () => {
+    expect(shortRole('devops-engineer')).toBe('devops');
   });
-  it('returns correct color for green', () => {
-    expect(getAgentColor('green')).toBe('#22c55e');
+  it('strips -specialist suffix', () => {
+    expect(shortRole('integration-specialist')).toBe('integration');
   });
-  it('returns correct color for orange', () => {
-    expect(getAgentColor('orange')).toBe('#f97316');
+  it('returns empty for undefined', () => {
+    expect(shortRole(undefined)).toBe('');
   });
-  it('returns correct color for yellow', () => {
-    expect(getAgentColor('yellow')).toBe('#eab308');
-  });
-  it('returns correct color for red', () => {
-    expect(getAgentColor('red')).toBe('#ef4444');
-  });
-  it('returns correct color for cyan', () => {
-    expect(getAgentColor('cyan')).toBe('#06b6d4');
-  });
-  it('returns fallback for unknown color', () => {
-    expect(getAgentColor('unknown')).toBe('#64748b');
-  });
-  it('returns fallback for empty string', () => {
-    expect(getAgentColor('')).toBe('#64748b');
-  });
-});
-
-describe('getContextHealthColor', () => {
-  it('returns neon green for GREEN', () => {
-    expect(getContextHealthColor('GREEN')).toBe('#39ff14');
-  });
-  it('returns amber for YELLOW', () => {
-    expect(getContextHealthColor('YELLOW')).toBe('#ffb800');
-  });
-  it('returns orange for ORANGE', () => {
-    expect(getContextHealthColor('ORANGE')).toBe('#f97316');
-  });
-  it('returns red for RED', () => {
-    expect(getContextHealthColor('RED')).toBe('#ff3b5c');
-  });
-  it('returns fallback for unknown health state', () => {
-    expect(getContextHealthColor('CRITICAL')).toBe('#64748b');
-  });
-});
-
-describe('getStatusColor', () => {
-  it('returns neon green for active', () => {
-    expect(getStatusColor('active')).toBe('#39ff14');
-  });
-  it('returns dark grey for idle', () => {
-    expect(getStatusColor('idle')).toBe('#4a5568');
-  });
-  it('returns red for error', () => {
-    expect(getStatusColor('error')).toBe('#ff3b5c');
-  });
-  it('returns amber for compacting', () => {
-    expect(getStatusColor('compacting')).toBe('#ffb800');
-  });
-  it('returns indigo for waiting', () => {
-    expect(getStatusColor('waiting')).toBe('#667eea');
-  });
-  it('returns fallback for unknown status', () => {
-    expect(getStatusColor('offline')).toBe('#4a5568');
+  it('leaves unrelated names untouched', () => {
+    expect(shortRole('team-lead')).toBe('team-lead');
   });
 });
 

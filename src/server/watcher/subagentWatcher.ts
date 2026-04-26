@@ -185,7 +185,7 @@ export class SubagentWatcher {
           cacheReadTokens:
             agent.cacheReadTokens + (usage?.cache_read_input_tokens ?? 0),
           estCostUsd:
-            agent.estCostUsd + (usage ? costForUsage(effectiveModel, usage) : 0),
+            agent.estCostUsd + costForUsage(effectiveModel, usage ?? {}),
         };
         registry.upsertAgent(next);
       }

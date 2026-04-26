@@ -7,6 +7,7 @@ import type { Agent, AgentEvent, Task } from '@/types';
 import { watchAgent } from '@/lib/api/agents';
 import { STATUS_COLOR_VARS } from '@/lib/constants/taskStatus';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { formatRelativeTime } from '@/lib/utils';
 
 interface TaskDetailDrawerProps {
   taskId: string | null;
@@ -15,15 +16,6 @@ interface TaskDetailDrawerProps {
   events: AgentEvent[];
   onClose: () => void;
   onNavigateToTask?: (id: string) => void;
-}
-
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diffMs / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
 }
 
 function duration(start: string, end?: string): string {
@@ -352,8 +344,8 @@ export function TaskDetailDrawer({
               color={STATUS_COLOR_VARS[task.status]}
             />
             <div className="grid grid-cols-3 gap-3">
-              <MetaRow label="created" value={timeAgo(task.createdAt)} />
-              <MetaRow label="updated" value={timeAgo(task.updatedAt)} />
+              <MetaRow label="created" value={formatRelativeTime(task.createdAt)} />
+              <MetaRow label="updated" value={formatRelativeTime(task.updatedAt)} />
               <MetaRow
                 label="duration"
                 value={duration(task.createdAt, task.completedAt)}
