@@ -8,6 +8,7 @@ import {
   testProject as apiTestProject,
   registerProject,
   deleteProject,
+  createAndRegisterProject,
 } from '@/lib/api/projects';
 import type { RegisteredProjectRow } from '@/types/workspace';
 import { Modal } from '@/components/ui/Modal';
@@ -26,6 +27,7 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
   const [projPath, setProjPath] = useState('');
   const [projBusy, setProjBusy] = useState(false);
   const [projResult, setProjResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [projMode, setProjMode] = useState<'register' | 'new'>('register');
 
   // Host popover state
   const [hostMenuOpen, setHostMenuOpen] = useState(false);
@@ -117,6 +119,35 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
     }
   }
 
+  async function handleCreateAndRegister() {
+    if (!projFormValid) return;
+    if (projHostId !== 'local') {
+      setProjResult({ ok: false, msg: 'Create & Register is only available for the local host' });
+      return;
+    }
+    setProjBusy(true);
+    setProjResult(null);
+    try {
+      const { install } = await createAndRegisterProject(
+        projName.trim(),
+        projHostId,
+        projPath.trim(),
+      );
+      void loadProjects();
+      setProjName('');
+      setProjHostId('local');
+      setProjPath('');
+      const msg = install.status === 'skipped'
+        ? 'Registered (team-kit already present)'
+        : 'Created & registered';
+      setProjResult({ ok: true, msg });
+    } catch (e) {
+      setProjResult({ ok: false, msg: (e as Error).message ?? 'Create & Register failed' });
+    } finally {
+      setProjBusy(false);
+    }
+  }
+
   function requestRemoveProject(id: string, name: string) {
     setRemoveTarget({ id, name });
   }
@@ -187,58 +218,45 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
   return (
     <div className="flex flex-col gap-4">
 
-      {/* TEAM-KIT */}
-      <div className="flex items-center gap-3 pt-1">
-        <a href="/api/workspace/teamkit.zip" download
-          className="font-mono text-xs px-3 py-1.5 rounded"
-          style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--foreground)', textDecoration: 'none' }}>
-          Download Team-kit
-        </a>
-        <span
-          className="relative"
-          onMouseEnter={() => setShowInfo(true)}
-          onMouseLeave={() => setShowInfo(false)}
-          onFocus={() => setShowInfo(true)}
-          onBlur={() => setShowInfo(false)}
-        >
-          <span
-            tabIndex={0}
-            aria-describedby="teamkit-info"
-            className="font-mono text-xs cursor-help underline decoration-dotted underline-offset-4"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            What is this?
-          </span>
-          {showInfo && (
-            <div
-              id="teamkit-info"
-              role="tooltip"
-              className="absolute font-mono text-[11px] leading-relaxed rounded p-3"
+      {/* ================================================================= */}
+      {/* REGISTER A PROJECT  /  CREATE A NEW PROJECT  (page-level tabs)     */}
+      {/* ================================================================= */}
+      <div
+        role="tablist"
+        aria-label="Project source"
+        className="flex items-center gap-0 -mb-2"
+        style={{ borderBottom: '1px solid var(--border)' }}
+      >
+        {(['register', 'new'] as const).map((mode) => {
+          const active = projMode === mode;
+          return (
+            <button
+              key={mode}
+              role="tab"
+              aria-selected={active}
+              type="button"
+              onClick={() => {
+                setProjMode(mode);
+                setProjResult(null);
+                if (mode === 'new') setProjHostId('local');
+              }}
+              className="font-mono text-xs px-4 py-2 transition-colors"
               style={{
-                top: 'calc(100% + 6px)',
-                left: 0,
-                zIndex: 60,
-                width: 320,
-                background: 'var(--surface-elevated)',
-                border: '1px solid var(--border)',
-                boxShadow: '0 8px 24px -4px color-mix(in srgb, var(--foreground) 25%, transparent)',
-                color: 'var(--text-muted)',
-                pointerEvents: 'none',
+                background: 'transparent',
+                color: active ? 'var(--accent-primary)' : 'var(--text-muted)',
+                borderBottom: `2px solid ${active ? 'var(--accent-primary)' : 'transparent'}`,
+                marginBottom: '-1px',
+                cursor: 'pointer',
+                fontWeight: active ? 600 : 400,
               }}
             >
-              Team-kit is the bundled set of agent role definitions (backend-dev, frontend-dev,
-              qa-engineer, etc.) and their prompt templates. Download and unzip into your project&apos;s{' '}
-              <code>.claude/</code> directory to give Claude Code instant access to the team. You can
-              edit the markdown files to customize each agent&apos;s behavior.
-            </div>
-          )}
-        </span>
+              {mode === 'register' ? 'Register' : 'New'}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ================================================================= */}
-      {/* REGISTER A PROJECT                                                  */}
-      {/* ================================================================= */}
-      <Box label="Register a project">
+      <Box label={projMode === 'new' ? 'Create a new project' : 'Register a project'}>
         <div className="flex flex-col gap-2">
           {/* Project Name */}
           <div className="flex gap-2 items-center">
@@ -374,8 +392,14 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
                 {projResult.ok ? '✓' : '✗'} {projResult.msg}
               </span>
             )}
-            <Btn onClick={() => { void handleRegister(); }} disabled={projBusy || !projFormValid} small>
-              {projBusy ? '…' : 'Test & Register'}
+            <Btn
+              onClick={() => {
+                void (projMode === 'new' ? handleCreateAndRegister() : handleRegister());
+              }}
+              disabled={projBusy || !projFormValid}
+              small
+            >
+              {projBusy ? '…' : projMode === 'new' ? 'Create & Register' : 'Test & Register'}
             </Btn>
           </div>
         </div>
@@ -434,6 +458,54 @@ export function WorkspaceTab({ hosts: hostsProp, onClose: _onClose }: Props) {
           )
         }
       </Box>
+
+      {/* TEAM-KIT (moved to bottom) */}
+      <div className="flex items-center gap-3 pt-1">
+        <a href="/api/workspace/teamkit.zip" download
+          className="font-mono text-xs px-3 py-1.5 rounded"
+          style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border)', color: 'var(--foreground)', textDecoration: 'none' }}>
+          Download Team-kit
+        </a>
+        <span
+          className="relative"
+          onMouseEnter={() => setShowInfo(true)}
+          onMouseLeave={() => setShowInfo(false)}
+          onFocus={() => setShowInfo(true)}
+          onBlur={() => setShowInfo(false)}
+        >
+          <span
+            tabIndex={0}
+            aria-describedby="teamkit-info"
+            className="font-mono text-xs cursor-help underline decoration-dotted underline-offset-4"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            What is this?
+          </span>
+          {showInfo && (
+            <div
+              id="teamkit-info"
+              role="tooltip"
+              className="absolute font-mono text-[11px] leading-relaxed rounded p-3"
+              style={{
+                bottom: 'calc(100% + 6px)',
+                left: 0,
+                zIndex: 60,
+                width: 320,
+                background: 'var(--surface-elevated)',
+                border: '1px solid var(--border)',
+                boxShadow: '0 8px 24px -4px color-mix(in srgb, var(--foreground) 25%, transparent)',
+                color: 'var(--text-muted)',
+                pointerEvents: 'none',
+              }}
+            >
+              Team-kit is the bundled set of agent role definitions (backend-dev, frontend-dev,
+              qa-engineer, etc.) and their prompt templates. Download and unzip into your project&apos;s{' '}
+              <code>.claude/</code> directory to give Claude Code instant access to the team. You can
+              edit the markdown files to customize each agent&apos;s behavior.
+            </div>
+          )}
+        </span>
+      </div>
 
       <Modal
         open={!!disconnectTarget}

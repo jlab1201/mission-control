@@ -1,4 +1,8 @@
-import type { RegisteredProject, RegisteredProjectRow } from '@/types/workspace';
+import type {
+  InstallResponse,
+  RegisteredProject,
+  RegisteredProjectRow,
+} from '@/types/workspace';
 
 export type { RegisteredProject, RegisteredProjectRow };
 
@@ -96,4 +100,44 @@ export async function deleteProject(id: string): Promise<void> {
   if (!res.ok && res.status !== 404) {
     throw new Error(`deleteProject failed (${res.status})`);
   }
+}
+
+/**
+ * POST /api/workspace/install (with createIfMissing) → POST /api/projects/register.
+ *
+ * "Create & register" flow used by the New-Project tab: creates the directory
+ * if it doesn't exist, copies the bundled team-kit into it, then registers it.
+ * Only works for local hosts — remote mkdir/install is not supported here.
+ */
+export async function createAndRegisterProject(
+  name: string,
+  hostId: string,
+  path: string,
+): Promise<{ project: RegisteredProject; install: InstallResponse }> {
+  if (hostId !== 'local') {
+    throw new Error('Create & Register is only supported for the local host');
+  }
+
+  const installRes = await fetch('/api/workspace/install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: path.trim(), createIfMissing: true }),
+  });
+
+  if (!installRes.ok) {
+    let detail = '';
+    try {
+      const body = (await installRes.json()) as { error?: { code?: string; message?: string } };
+      detail = body.error?.message ?? body.error?.code ?? '';
+    } catch { /* ignore */ }
+    throw new Error(detail || `Install failed (${installRes.status})`);
+  }
+
+  const install = (await installRes.json()) as InstallResponse;
+  if (install.status === 'error') {
+    throw new Error(install.message || 'Install failed');
+  }
+
+  const { project } = await registerProject(name, hostId, path);
+  return { project, install };
 }
