@@ -82,3 +82,6 @@ $RECYCLE.BIN/
 *.db
 *.db-journal
 /~/
+# Migration backups created by update.sh / install.sh when healing broken installs.
+# Pattern: ~.bak-YYYYMMDD-HHMMSS/  (literal '~' prefix, timestamped suffix)
+/~.bak-*/
