@@ -1,5 +1,6 @@
 import { statSync } from 'fs';
 import { findCurrentSession, getWatchedProjectPath } from './sessionLocator';
+import type { SessionLocation } from './sessionLocator';
 import { MainSessionWatcher } from './mainSessionWatcher';
 import { SubagentWatcher } from './subagentWatcher';
 import { registry } from './registry';
@@ -52,11 +53,31 @@ function bootWatcher(): void {
   registry.cwd = getWatchedProjectPath();
 
   const session = findCurrentSession();
-  if (!session) {
-    console.warn('[mission-control] No active Claude session found. Dashboard will show empty state.');
+  if (session) {
+    attachToSession(session);
     return;
   }
 
+  // No Claude session in the watched dir yet — common when a project was
+  // just registered and the user hasn't started Claude in it yet, or starts
+  // it shortly after MC. Poll for one to appear and attach when it does.
+  console.warn(
+    '[mission-control] No active Claude session yet — polling for one to appear.',
+  );
+  const discoveryInterval = setInterval(() => {
+    const found = findCurrentSession();
+    if (!found) return;
+    clearInterval(discoveryInterval);
+    console.info('[mission-control] Claude session detected:', found.sessionId);
+    attachToSession(found);
+  }, POLL_INTERVAL_MS);
+
+  g.__missionWatcher = {
+    stop: () => clearInterval(discoveryInterval),
+  };
+}
+
+function attachToSession(session: SessionLocation): void {
   // Initialise registry session metadata
   registry.sessionId = session.sessionId;
   g.__missionRegistry = registry;
@@ -130,6 +151,11 @@ function bootWatcher(): void {
     g.__missionWatcher = {
       stop: () => clearInterval(interval),
     };
+
+    // Push a snapshot so the dashboard transitions out of empty state
+    // immediately when discovery finds the session, instead of waiting for
+    // the next event from the live tail.
+    broadcast({ type: 'snapshot', payload: registry.snapshot() });
   }).catch((err) => {
     console.error('[mission-control] Boot error:', err);
   });

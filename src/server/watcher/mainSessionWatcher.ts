@@ -40,6 +40,12 @@ export class MainSessionWatcher {
   private pendingTasks = new Map<string, PendingTask>();
   /** tool_use.id → tool_use block, for correlating results */
   private seenToolUses = new Map<string, ToolUseBlock>();
+  /**
+   * Set of tool_use ids whose matching tool_result has not yet been written.
+   * Suppresses the active→idle demotion in refreshMainStatus while at least
+   * one tool call is still in flight on the main session.
+   */
+  private pendingTools = new Set<string>();
 
   constructor(
     private readonly jsonlPath: string,
@@ -69,6 +75,10 @@ export class MainSessionWatcher {
   private refreshMainStatus(): void {
     const main = registry.getAgent('main');
     if (!main || main.status !== 'active') return;
+
+    // Don't demote while tool calls are in flight — mtime is expected to be
+    // stale during a long Bash/MCP/etc. call.
+    if (this.pendingTools.size > 0) return;
 
     let mtimeMs = 0;
     try {
@@ -161,6 +171,9 @@ export class MainSessionWatcher {
       if (block.name === 'Agent' || block.name === 'TaskCreate') {
         this.seenToolUses.set(block.id, block);
       }
+      // pendingTools tracks ALL tool calls — every tool_use is paired with a
+      // tool_result by the protocol, so the Set drains naturally.
+      this.pendingTools.add(block.id);
       this.handleToolUse(block, ts);
     }
   }
@@ -342,6 +355,13 @@ export class MainSessionWatcher {
   private processUserEntry(entry: RawEntry, ts: string): void {
     const toolResults = extractToolResults(entry);
     const toolUseResult = entry.toolUseResult;
+
+    // Drain pendingTools for every result — including ones that don't match
+    // a known seenToolUses entry. We want the Set to track lifecycle, not just
+    // the subset of tool calls we care about for spawn/task correlation.
+    for (const result of toolResults) {
+      this.pendingTools.delete(result.tool_use_id);
+    }
 
     for (const result of toolResults) {
       const toolUseId = result.tool_use_id;

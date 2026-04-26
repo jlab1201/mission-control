@@ -44,6 +44,13 @@ interface TrackedAgent {
   pendingSpawns: Map<string, PendingSubSpawn>;
   /** tool_use id → block, for correlating with tool_results */
   seenToolUses: Map<string, ToolUseBlock>;
+  /**
+   * Set of tool_use ids whose matching tool_result has not yet been written
+   * to the transcript. While non-empty, the agent is "blocked on a tool" and
+   * its mtime stillness is expected — refreshAgentStatus must keep it 'active'
+   * so a long Bash/playwright run does not get falsely marked idle/completed.
+   */
+  pendingTools: Set<string>;
 }
 
 export class SubagentWatcher {
@@ -61,6 +68,7 @@ export class SubagentWatcher {
       recentToolNames: [],
       pendingSpawns: new Map(),
       seenToolUses: new Map(),
+      pendingTools: new Set(),
     });
   }
 
@@ -193,6 +201,7 @@ export class SubagentWatcher {
 
     for (const block of toolUses) {
       tracked.seenToolUses.set(block.id, block);
+      tracked.pendingTools.add(block.id);
 
       const input = block.input as Record<string, unknown>;
       tracked.recentToolNames.push(block.name);
@@ -257,6 +266,13 @@ export class SubagentWatcher {
     const toolUseResult = entry.toolUseResult;
     const ts = entry.timestamp ?? new Date().toISOString();
 
+    // Drain pendingTools for every result, regardless of whether it matches
+    // a known spawn. Every tool_use eventually has a matching tool_result —
+    // unmatched ids would otherwise leak the agent into permanent 'active'.
+    for (const result of toolResults) {
+      tracked.pendingTools.delete(result.tool_use_id);
+    }
+
     for (const result of toolResults) {
       const pending = tracked.pendingSpawns.get(result.tool_use_id);
       if (!pending || !toolUseResult?.agentId) continue;
@@ -312,6 +328,17 @@ export class SubagentWatcher {
   private refreshAgentStatus(tracked: TrackedAgent): void {
     const agent = registry.getAgent(tracked.agentId);
     if (!agent) return;
+
+    // If at least one tool_use is still awaiting its tool_result, the agent
+    // is alive and blocked on the tool — keep it 'active' regardless of
+    // mtime. This is what allows long-running Bash/playwright/test calls to
+    // hold the spinner instead of the agent appearing dead at 30s.
+    if (tracked.pendingTools.size > 0) {
+      if (agent.status !== 'active') {
+        registry.upsertAgent({ ...agent, status: 'active' });
+      }
+      return;
+    }
 
     let mtimeMs = 0;
     try {
