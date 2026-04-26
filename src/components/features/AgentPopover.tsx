@@ -4,7 +4,7 @@ import { useLayoutEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { createPortal } from 'react-dom';
 import type { Agent } from '@/types';
-import { useElapsed } from '@/hooks/useElapsed';
+import { useWorkDuration } from '@/hooks/useWorkDuration';
 import { shortRole } from '@/lib/utils';
 import { agentColor } from '@/lib/constants/agentColors';
 import { HostBadge } from '@/components/features/HostBadge';
@@ -151,7 +151,7 @@ export function AgentPopover({
 
 function SubagentRow({ agent }: { agent: Agent }) {
   const isActive = agent.status === 'active';
-  const elapsed = useElapsed(agent.startedAt, isActive, agent.lastActiveAt);
+  const elapsed = useWorkDuration(agent.workDurationMs, agent.activeStreakStart);
   const color = agent.color ?? agentColor(agent.subagentType ?? agent.name);
   const label = shortRole(agent.subagentType ?? agent.name) || agent.name;
   const hosts = useMissionStore(useShallow(selectHosts));

@@ -140,6 +140,8 @@ export class MainSessionWatcher {
         estCostUsd: 0,
         hostId: localHostId(),
         hostLabel: localHostLabel(),
+        workDurationMs: 0,
+        activeStreakStart: null,
       };
       registry.upsertAgent(mainAgent);
     } else if (model && !existingMain.model) {
@@ -325,6 +327,8 @@ export class MainSessionWatcher {
       estCostUsd: 0,
       hostId: localHostId(),
       hostLabel: localHostLabel(),
+      workDurationMs: 0,
+      activeStreakStart: null,
     };
     registry.upsertAgent(agent);
   }
@@ -396,6 +400,8 @@ export class MainSessionWatcher {
           estCostUsd: 0,
           hostId: localHostId(),
           hostLabel: localHostLabel(),
+          workDurationMs: 0,
+          activeStreakStart: null,
         };
         registry.upsertAgent(agent);
         reconcileTeamPlaceholders();

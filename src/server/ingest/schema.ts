@@ -38,6 +38,11 @@ const AgentIngestSchema = z
     estCostUsd: z.number().min(0),
     hostId: z.string().optional(),
     hostLabel: z.string().optional(),
+    // Duration bookkeeping is computed locally from observed status transitions,
+    // so these are accepted from remote reporters but always overridden by
+    // applyDurationBookkeeping inside registry.upsertAgent.
+    workDurationMs: z.number().min(0).optional(),
+    activeStreakStart: ISODateString.nullable().optional(),
   })
   .strict();
 

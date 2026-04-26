@@ -112,6 +112,8 @@ function attachToSession(session: SessionLocation): void {
     estCostUsd: 0,
     hostId: localHostId(),
     hostLabel: localHostLabel(),
+    workDurationMs: 0,
+    activeStreakStart: null,
   };
   registry.upsertAgent(mainAgent);
 

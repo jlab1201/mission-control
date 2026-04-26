@@ -41,6 +41,8 @@ function makeAgent(id: string, transcriptPath: string): Agent {
     cacheReadTokens: 0,
     estCostUsd: 0,
     hostId: 'local',
+    workDurationMs: 0,
+    activeStreakStart: null,
   };
 }
 

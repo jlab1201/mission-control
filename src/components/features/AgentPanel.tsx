@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Agent, AgentDefinition } from '@/types';
-import { useElapsed } from '@/hooks/useElapsed';
+import { useWorkDuration } from '@/hooks/useWorkDuration';
 import { watchAgent } from '@/lib/api/agents';
 import { AgentPopover } from './AgentPopover';
 import { HostBadge } from '@/components/features/HostBadge';
@@ -290,10 +290,9 @@ function AgentRailCard({
   onClick,
   onDismiss,
 }: AgentRailCardProps) {
-  const elapsed = useElapsed(
-    entry.live?.startedAt,
-    entry.status === 'active',
-    entry.live?.lastActiveAt,
+  const elapsed = useWorkDuration(
+    entry.live?.workDurationMs ?? 0,
+    entry.live?.activeStreakStart ?? null,
   );
   const [watching, setWatching] = useState<'idle' | 'loading' | 'done' | 'error'>(
     'idle',

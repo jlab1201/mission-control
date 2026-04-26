@@ -22,7 +22,10 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     type: 'subagent',
     name: 'backend-dev',
     subagentType: 'backend-dev',
-    status: 'active',
+    // Default to 'idle' so applyDurationBookkeeping is a no-op for tests
+    // that don't care about status; tests that exercise active-streak
+    // behavior set status: 'active' explicitly.
+    status: 'idle',
     phase: 'implementing',
     toolUseCount: 0,
     startedAt: '2026-04-15T10:00:00.000Z',
@@ -35,6 +38,8 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     cacheReadTokens: 0,
     estCostUsd: 0,
     hostId: 'local',
+    workDurationMs: 0,
+    activeStreakStart: null,
     ...overrides,
   };
 }
@@ -260,6 +265,110 @@ describe('Registry', () => {
       for (let i = 1; i < events.length; i++) {
         expect(events[i].seq).toBeGreaterThan(events[i - 1].seq);
       }
+    });
+  });
+
+  // ── duration bookkeeping ──────────────────────────────────────────────
+
+  describe('per-agent workDurationMs / activeStreakStart', () => {
+    it('opens a streak when a new agent is created active', () => {
+      registry.upsertAgent(makeAgent({ status: 'active' }));
+      const stored = registry.getAgent('agent-1');
+      expect(stored?.activeStreakStart).not.toBeNull();
+      expect(stored?.workDurationMs).toBe(0);
+    });
+
+    it('does not open a streak for a non-active new agent', () => {
+      registry.upsertAgent(makeAgent({ status: 'idle' }));
+      const stored = registry.getAgent('agent-1');
+      expect(stored?.activeStreakStart).toBeNull();
+      expect(stored?.workDurationMs).toBe(0);
+    });
+
+    it('accumulates workDurationMs and clears the streak on active → idle', async () => {
+      registry.upsertAgent(makeAgent({ status: 'active' }));
+      // Advance wall clock without a real sleep — clamp to a small positive
+      // delta by mocking Date.now around the second upsert.
+      const originalNow = Date.now;
+      const t0 = originalNow.call(Date);
+      Date.now = () => t0 + 5_000;
+      try {
+        registry.upsertAgent(makeAgent({ status: 'idle' }));
+      } finally {
+        Date.now = originalNow;
+      }
+      const stored = registry.getAgent('agent-1');
+      expect(stored?.activeStreakStart).toBeNull();
+      expect(stored?.workDurationMs).toBeGreaterThanOrEqual(4_900);
+      expect(stored?.workDurationMs).toBeLessThanOrEqual(5_100);
+    });
+
+    it('opens a fresh streak on idle → active without resetting the accumulator', () => {
+      // Run idle→active to build up some duration first.
+      registry.upsertAgent(makeAgent({ status: 'active' }));
+      const originalNow = Date.now;
+      const t0 = originalNow.call(Date);
+      Date.now = () => t0 + 3_000;
+      try {
+        registry.upsertAgent(makeAgent({ status: 'idle' }));
+        Date.now = () => t0 + 6_000;
+        registry.upsertAgent(makeAgent({ status: 'active' }));
+      } finally {
+        Date.now = originalNow;
+      }
+      const stored = registry.getAgent('agent-1');
+      expect(stored?.activeStreakStart).not.toBeNull();
+      // The pre-pause accumulation is preserved.
+      expect(stored?.workDurationMs).toBeGreaterThanOrEqual(2_900);
+      expect(stored?.workDurationMs).toBeLessThanOrEqual(3_100);
+    });
+
+    it('does not change duration when active stays active', () => {
+      registry.upsertAgent(makeAgent({ status: 'active' }));
+      const first = registry.getAgent('agent-1');
+      registry.upsertAgent(makeAgent({ status: 'active', toolUseCount: 5 }));
+      const second = registry.getAgent('agent-1');
+      // Same streak start preserved; accumulator still 0 (no transition closed).
+      expect(second?.activeStreakStart).toBe(first?.activeStreakStart);
+      expect(second?.workDurationMs).toBe(0);
+      // But the unrelated field did update.
+      expect(second?.toolUseCount).toBe(5);
+    });
+  });
+
+  describe('mission-level duration', () => {
+    it('opens missionActiveSince when the first agent goes active', () => {
+      registry.upsertAgent(makeAgent({ status: 'active' }));
+      const stats = registry.computeStats();
+      expect(stats.missionActiveSince).not.toBeNull();
+      expect(stats.missionWorkDurationMs).toBe(0);
+    });
+
+    it('stays active while at least one agent is active (union, not sum)', () => {
+      registry.upsertAgent(makeAgent({ id: 'agent-1', status: 'active' }));
+      registry.upsertAgent(makeAgent({ id: 'agent-2', status: 'active' }));
+      const before = registry.computeStats().missionActiveSince;
+      // Demote one — mission should still be active because agent-2 is still active.
+      registry.upsertAgent(makeAgent({ id: 'agent-1', status: 'idle' }));
+      const after = registry.computeStats();
+      expect(after.missionActiveSince).toBe(before);
+      expect(after.missionWorkDurationMs).toBe(0);
+    });
+
+    it('closes the streak when the last active agent goes idle', () => {
+      registry.upsertAgent(makeAgent({ id: 'agent-1', status: 'active' }));
+      const originalNow = Date.now;
+      const t0 = originalNow.call(Date);
+      Date.now = () => t0 + 4_000;
+      try {
+        registry.upsertAgent(makeAgent({ id: 'agent-1', status: 'idle' }));
+      } finally {
+        Date.now = originalNow;
+      }
+      const stats = registry.computeStats();
+      expect(stats.missionActiveSince).toBeNull();
+      expect(stats.missionWorkDurationMs).toBeGreaterThanOrEqual(3_900);
+      expect(stats.missionWorkDurationMs).toBeLessThanOrEqual(4_100);
     });
   });
 });

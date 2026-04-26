@@ -6,7 +6,7 @@ import { PhaseIndicator } from '@/components/ui/PhaseIndicator';
 import { ActivitySparkline } from '@/components/ui/ActivitySparkline';
 import { HostBadge } from '@/components/features/HostBadge';
 import type { Agent } from '@/types';
-import { useElapsed } from '@/hooks/useElapsed';
+import { useWorkDuration } from '@/hooks/useWorkDuration';
 import { watchAgent } from '@/lib/api/agents';
 import { shortRole } from '@/lib/utils';
 import { agentColor } from '@/lib/constants/agentColors';
@@ -27,7 +27,9 @@ function AgentCard({ agent, multiHost }: AgentCardProps) {
 
   const isTeam = agent.type === 'team';
   const isActive = agent.status === 'active';
-  const elapsed = useElapsed(agent.startedAt, isActive, agent.lastActiveAt);
+  // Accumulated work duration: ticks while the agent is active, frozen
+  // (and preserved across status flips) when it isn't. See useWorkDuration.
+  const elapsed = useWorkDuration(agent.workDurationMs, agent.activeStreakStart);
   const isIdle = agent.status === 'idle';
   // Resolve color the same way TaskCard does: agent.color override, then the
   // shared role palette keyed by subagentType (specialist subagents) or name

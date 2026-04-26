@@ -44,6 +44,8 @@ function makeAgent(id: string, hostId = 'test-host'): Agent {
     cacheReadTokens: 0,
     estCostUsd: 0,
     hostId,
+    workDurationMs: 0,
+    activeStreakStart: null,
   };
 }
 

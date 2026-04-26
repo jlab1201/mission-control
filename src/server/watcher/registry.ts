@@ -15,6 +15,47 @@ import { localHostId, localHostLabel } from './watcherCore';
 
 const RING_BUFFER_SIZE = EVENT_RING_BUFFER_SIZE;
 
+/**
+ * Computes the next Agent record with workDurationMs / activeStreakStart
+ * managed based on the status transition between `prev` and `incoming`.
+ *
+ * Callers pass an Agent with whatever workDurationMs / activeStreakStart
+ * values they like (typically zero / null at creation time); this function
+ * always overrides them so transition tracking is centralised here.
+ *
+ * Transitions:
+ *   - prev=non-active → next=active: open a new streak (activeStreakStart=now)
+ *   - prev=active → next=non-active: accumulate the streak into workDurationMs
+ *   - active → active: keep the existing streak start, no accumulation yet
+ *   - non-active → non-active: nothing changes
+ *   - new agent (no prev), starting active: open streak from now
+ *   - new agent (no prev), starting non-active: leave at 0 / null
+ */
+export function applyDurationBookkeeping(
+  prev: Agent | undefined,
+  incoming: Agent,
+): Agent {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const prevActive = prev?.status === 'active';
+  const nextActive = incoming.status === 'active';
+
+  let workDurationMs = prev?.workDurationMs ?? 0;
+  let activeStreakStart: string | null = prev?.activeStreakStart ?? null;
+
+  if (prevActive && !nextActive && activeStreakStart) {
+    // Closing a streak — accumulate elapsed into the total.
+    workDurationMs += Math.max(0, now - new Date(activeStreakStart).getTime());
+    activeStreakStart = null;
+  } else if (!prevActive && nextActive) {
+    // Opening a new streak.
+    activeStreakStart = nowIso;
+  }
+  // (active→active and non→non: leave fields untouched)
+
+  return { ...incoming, workDurationMs, activeStreakStart };
+}
+
 export class Registry {
   private agents = new Map<string, Agent>();
   private tasks = new Map<string, Task>();
@@ -26,6 +67,17 @@ export class Registry {
   cwd = '';
   /** Pending coalesced stats broadcast timer handle */
   private statsBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Mission-level accumulated work duration (ms). Increments while at least
+   * one local agent is in 'active' status. See recomputeMissionDuration().
+   */
+  private missionWorkDurationMs = 0;
+  /**
+   * ISO timestamp of the current mission-active streak, or null when no agent
+   * is active. The "live" portion of the displayed duration is computed as
+   * `now - missionActiveSince` and added to missionWorkDurationMs by readers.
+   */
+  private missionActiveSince: string | null = null;
 
   // ── Batch state ───────────────────────────────────────────────────────────
   private inBatch = false;
@@ -59,16 +111,19 @@ export class Registry {
   }
 
   upsertAgent(agent: Agent): void {
-    this.agents.set(agent.id, agent);
+    const prev = this.agents.get(agent.id);
+    const next = applyDurationBookkeeping(prev, agent);
+    this.agents.set(next.id, next);
+    this.recomputeMissionDuration();
     if (this.inBatch) {
       // If this id was previously queued for delete, the upsert wins (last-write)
-      this.batchedAgentDeletes.delete(agent.id);
-      this.batchedAgentUpserts.set(agent.id, agent);
+      this.batchedAgentDeletes.delete(next.id);
+      this.batchedAgentUpserts.set(next.id, next);
       this.batchSaveRequested = true;
       return;
     }
     const seq = this.nextSeq();
-    broadcast({ type: 'agent:update', seq, payload: agent });
+    broadcast({ type: 'agent:update', seq, payload: next });
     this.scheduleStatsBroadcast();
     if (this.cwd) scheduleSave(this.cwd, this.toSnapshot());
   }
@@ -76,6 +131,7 @@ export class Registry {
   removeAgent(id: string): void {
     if (!this.agents.has(id)) return;
     this.agents.delete(id);
+    this.recomputeMissionDuration();
     if (this.inBatch) {
       // Delete wins over any pending upsert for same id
       this.batchedAgentUpserts.delete(id);
@@ -89,6 +145,30 @@ export class Registry {
     if (this.cwd) scheduleSave(this.cwd, this.toSnapshot());
   }
 
+  /**
+   * Refreshes mission-level duration state based on whether any agent is
+   * currently active. Called after every agent insert/update/delete.
+   *
+   * - non-active → active: opens missionActiveSince at now
+   * - active → non-active: accumulates the streak into missionWorkDurationMs
+   * - same union: nothing changes
+   */
+  private recomputeMissionDuration(): void {
+    const anyActive = Array.from(this.agents.values()).some(
+      (a) => a.status === 'active',
+    );
+    const wasActive = this.missionActiveSince !== null;
+    if (anyActive && !wasActive) {
+      this.missionActiveSince = new Date().toISOString();
+    } else if (!anyActive && wasActive && this.missionActiveSince) {
+      this.missionWorkDurationMs += Math.max(
+        0,
+        Date.now() - new Date(this.missionActiveSince).getTime(),
+      );
+      this.missionActiveSince = null;
+    }
+  }
+
   /** Reset all in-memory state. Used by tests and direct callers. */
   clear(): void {
     this.agents.clear();
@@ -97,6 +177,8 @@ export class Registry {
     this.lastSeq = 0;
     this.sessionId = '';
     this.cwd = '';
+    this.missionWorkDurationMs = 0;
+    this.missionActiveSince = null;
     // Cancel any pending stats broadcast — stale after a full reset
     if (this.statsBroadcastTimer !== null) {
       clearTimeout(this.statsBroadcastTimer);
@@ -266,6 +348,10 @@ export class Registry {
       this.cwd = '';
       this.batchSaveRequested = true;
     });
+    // Mission-level duration is local-only state — clear it when wiping the
+    // local host. Multi-host duration aggregation is out of scope here.
+    this.missionWorkDurationMs = 0;
+    this.missionActiveSince = null;
     // Cancel any pending async stats broadcast — state is stale after clearLocal
     if (this.statsBroadcastTimer !== null) {
       clearTimeout(this.statsBroadcastTimer);
@@ -355,6 +441,8 @@ export class Registry {
       ),
       lastEventAt,
       hosts,
+      missionWorkDurationMs: this.missionWorkDurationMs,
+      missionActiveSince: this.missionActiveSince,
     };
   }
 
@@ -372,6 +460,8 @@ export class Registry {
       // back so the ring buffer is stored oldest-first (natural read order).
       events: this.eventsSince(0).slice(-RING_BUFFER_SIZE),
       knownHosts: getAllHosts(),
+      missionWorkDurationMs: this.missionWorkDurationMs,
+      missionActiveSince: this.missionActiveSince,
     };
   }
 
@@ -390,12 +480,27 @@ export class Registry {
     const isV1 = snapshot.version === 1;
     const fallbackHostId = localHostId();
     const fallbackHostLabel = localHostLabel();
+    const savedAtMs = new Date(snapshot.savedAt).getTime();
 
     for (const agent of snapshot.agents) {
-      const hydrated: Agent = isV1
+      const base: Agent = isV1
         ? { ...agent, hostId: agent.hostId ?? fallbackHostId, hostLabel: agent.hostLabel ?? fallbackHostLabel }
         : agent;
-      this.agents.set(hydrated.id, hydrated);
+
+      // Default the new duration fields for snapshots that predate them.
+      let workDurationMs = base.workDurationMs ?? 0;
+      let activeStreakStart: string | null = base.activeStreakStart ?? null;
+
+      // Freeze any in-flight streak: credit work up to when the snapshot was
+      // saved (verifiable from the file), but don't credit the gap between
+      // snapshot save and now (we have no way to know if MC was running).
+      if (activeStreakStart) {
+        const streakStartMs = new Date(activeStreakStart).getTime();
+        workDurationMs += Math.max(0, savedAtMs - streakStartMs);
+        activeStreakStart = null;
+      }
+
+      this.agents.set(base.id, { ...base, workDurationMs, activeStreakStart });
     }
     for (const task of snapshot.tasks) {
       this.tasks.set(task.id, task);
@@ -415,6 +520,15 @@ export class Registry {
     this.lastSeq = snapshot.lastSeq;
     this.sessionId = snapshot.sessionId ?? '';
     this.cwd = snapshot.cwd ?? '';
+
+    // Mission-level duration: same freeze logic as per-agent.
+    this.missionWorkDurationMs = snapshot.missionWorkDurationMs ?? 0;
+    const savedMissionStreak = snapshot.missionActiveSince ?? null;
+    if (savedMissionStreak) {
+      const streakStartMs = new Date(savedMissionStreak).getTime();
+      this.missionWorkDurationMs += Math.max(0, savedAtMs - streakStartMs);
+    }
+    this.missionActiveSince = null;
 
     // Hydrate known hosts (optional field — absent in older v2 snapshots)
     hydrateHosts(snapshot.knownHosts ?? []);

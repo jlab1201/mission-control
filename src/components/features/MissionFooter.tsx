@@ -3,6 +3,7 @@
 import { useShallow } from 'zustand/react/shallow';
 import { HeartbeatIndicator } from '@/components/ui/HeartbeatIndicator';
 import { useMissionStore, selectFilteredAgents } from '@/lib/store/missionStore';
+import { useWorkDuration } from '@/hooks/useWorkDuration';
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -20,6 +21,12 @@ export function MissionFooter() {
   const agents = useMissionStore(useShallow(selectFilteredAgents));
   const sseStatus = useMissionStore((s) => s.sseStatus);
   const lastEventReceivedAt = useMissionStore((s) => s.lastEventReceivedAt);
+  const missionWorkDurationMs = useMissionStore(
+    (s) => s.stats?.missionWorkDurationMs ?? 0,
+  );
+  const missionActiveSince = useMissionStore(
+    (s) => s.stats?.missionActiveSince ?? null,
+  );
 
   const totalTokens = agents.reduce(
     (sum, a) =>
@@ -31,6 +38,7 @@ export function MissionFooter() {
     0,
   );
   const totalCost = agents.reduce((sum, a) => sum + (a.estCostUsd ?? 0), 0);
+  const duration = useWorkDuration(missionWorkDurationMs, missionActiveSince);
 
   return (
     <footer
@@ -42,6 +50,12 @@ export function MissionFooter() {
       }}
       role="contentinfo"
     >
+      <Stat
+        label="duration"
+        value={duration}
+        title="Total time at least one agent was active. Pauses when every agent is idle/completed; never resets — accumulates across status flips and persists across MC restarts."
+      />
+      <Separator />
       <Stat
         label="tokens"
         value={formatTokens(totalTokens)}

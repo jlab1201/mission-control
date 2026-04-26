@@ -65,6 +65,8 @@ function makeSnapshot(overrides: Partial<MissionSnapshot> = {}): MissionSnapshot
       velocityPer10Min: 0,
       sessionUptimeSeconds: 0,
       hosts: [],
+      missionWorkDurationMs: 0,
+      missionActiveSince: null,
     },
     ...overrides,
   };
@@ -160,6 +162,8 @@ describe('useSSE', () => {
           cacheReadTokens: 0,
           estCostUsd: 0,
           hostId: 'local',
+          workDurationMs: 0,
+          activeStreakStart: null,
         },
       } satisfies SSEMessage);
     });

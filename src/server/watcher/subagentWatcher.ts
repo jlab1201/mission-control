@@ -149,6 +149,8 @@ export class SubagentWatcher {
             estCostUsd: 0,
             hostId: localHostId(),
             hostLabel: localHostLabel(),
+            workDurationMs: 0,
+            activeStreakStart: null,
           };
           registry.upsertAgent(placeholder);
           reconcileTeamPlaceholders();
@@ -306,6 +308,8 @@ export class SubagentWatcher {
         estCostUsd: 0,
         hostId: localHostId(),
         hostLabel: localHostLabel(),
+        workDurationMs: 0,
+        activeStreakStart: null,
       };
       registry.upsertAgent(childAgent);
 

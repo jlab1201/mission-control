@@ -42,6 +42,19 @@ export interface Agent {
   estCostUsd: number;               // cumulative estimated cost in USD (0 if model unknown)
   hostId: string;                   // stable short identifier for the host, e.g. "laptop", "local"
   hostLabel?: string;               // optional human-friendly display name for the host
+  /**
+   * Total milliseconds this agent has spent in 'active' status, accumulated
+   * across all active streaks. Persists across MC restarts via the snapshot
+   * file. Used to render an agent's lifetime work duration that pauses
+   * (instead of resetting) whenever the agent goes idle/completed.
+   */
+  workDurationMs: number;
+  /**
+   * ISO timestamp when the current active streak started, or null when the
+   * agent is not currently active. The dashboard ticks the displayed
+   * duration only while this is non-null.
+   */
+  activeStreakStart: string | null;
 }
 
 /** Agent shape safe for HTTP responses — internal fs paths are stripped. */
@@ -108,6 +121,16 @@ export interface MissionStats {
     agentCount: number;
     activeAgentCount: number;
   }>;
+  /**
+   * Mission-level accumulated work duration: total ms during which at least
+   * one local agent was active. Pauses when every agent is idle/completed.
+   */
+  missionWorkDurationMs: number;
+  /**
+   * ISO timestamp when the mission's current active streak started, or null
+   * when no agent is currently active.
+   */
+  missionActiveSince: string | null;
 }
 
 export interface MissionSnapshot {
@@ -138,6 +161,10 @@ export interface RegistrySnapshot {
   tasks: Task[];             // materialized from the Map
   events: AgentEvent[];      // last 500 from the ring buffer
   knownHosts?: HostInfo[];   // optional — absent in older v2 snapshots
+  /** Mission-level accumulated work duration (ms). Optional for back-compat. */
+  missionWorkDurationMs?: number;
+  /** Mission-level current active-streak start, or null. Optional for back-compat. */
+  missionActiveSince?: string | null;
 }
 
 // SSE message union (internal — agents carry transcriptPath)

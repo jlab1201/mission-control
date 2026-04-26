@@ -26,6 +26,8 @@ const mockAgent: Agent = {
   cacheReadTokens: 0,
   estCostUsd: 0,
   hostId: 'local',
+  workDurationMs: 0,
+  activeStreakStart: null,
 };
 
 const mockAgent2: Agent = {
@@ -48,6 +50,8 @@ const mockAgent2: Agent = {
   cacheReadTokens: 0,
   estCostUsd: 0,
   hostId: 'local',
+  workDurationMs: 0,
+  activeStreakStart: null,
 };
 
 const mockTask: Task = {
@@ -96,6 +100,8 @@ const mockStats: MissionStats = {
   velocityPer10Min: 4,
   sessionUptimeSeconds: 3600,
   hosts: [],
+  missionWorkDurationMs: 0,
+  missionActiveSince: null,
 };
 
 const mockSnapshot: MissionSnapshot = {
