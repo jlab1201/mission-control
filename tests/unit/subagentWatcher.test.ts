@@ -44,11 +44,11 @@ function makeAgent(id: string, transcriptPath: string): Agent {
   };
 }
 
-function toolUseLine(id: string, name: string): string {
+function toolUseLine(id: string, name: string, isSidechain = false): string {
   return (
     JSON.stringify({
       timestamp: new Date().toISOString(),
-      isSidechain: false,
+      isSidechain,
       message: {
         role: 'assistant',
         content: [{ type: 'tool_use', id, name, input: {} }],
@@ -57,11 +57,11 @@ function toolUseLine(id: string, name: string): string {
   );
 }
 
-function toolResultLine(toolUseId: string): string {
+function toolResultLine(toolUseId: string, isSidechain = false): string {
   return (
     JSON.stringify({
       timestamp: new Date().toISOString(),
-      isSidechain: false,
+      isSidechain,
       message: {
         role: 'user',
         content: [
@@ -125,5 +125,33 @@ describe('SubagentWatcher pendingTools status override', () => {
     await watcher.poll();
 
     expect(registry.getAgent(agentId)?.status).toBe('completed');
+  });
+
+  // Regression: in real Claude Code subagent transcripts, every entry is
+  // written with isSidechain=true. The watcher previously filtered those out
+  // on the assumption that they were duplicates of main-session traffic,
+  // which dropped 100% of subagent activity and left the dashboard showing
+  // stale lastActiveAt and empty pendingTools.
+  it('processes entries even when isSidechain=true (real Claude Code subagent format)', async () => {
+    const agentId = 'sidechain-entries';
+    const transcriptPath = join(testDir, `agent-${agentId}.jsonl`);
+
+    // The tool_use line is marked sidechain=true — exactly what Claude
+    // writes for subagent transcripts in current versions.
+    await writeFile(transcriptPath, toolUseLine('tool_1', 'Bash', true));
+    registry.upsertAgent(makeAgent(agentId, transcriptPath));
+
+    const watcher = new SubagentWatcher(testDir);
+    watcher.add(agentId, transcriptPath);
+    await watcher.coldStart();
+
+    // If the sidechain filter were still in place, the tool_use would have
+    // been ignored, pendingTools would be empty, and a 10-min jump would
+    // demote the agent to completed.
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 10 * 60 * 1000);
+    await watcher.poll();
+
+    expect(registry.getAgent(agentId)?.status).toBe('active');
   });
 });

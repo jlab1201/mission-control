@@ -160,9 +160,12 @@ export class SubagentWatcher {
   private processAgentText(tracked: TrackedAgent, text: string): void {
     const { entries } = parseJsonlLines(text);
     for (const entry of entries) {
-      // CRITICAL: skip sidechain lines — they duplicate subagent traffic
-      if (entry.isSidechain === true) continue;
-
+      // NOTE: do NOT filter on entry.isSidechain here. In a subagent's OWN
+      // transcript file, every entry is marked sidechain=true — those ARE
+      // the subagent's actual messages, not duplicates. The sidechain filter
+      // is only correct in mainSessionWatcher, where sidechain entries in
+      // the main JSONL really are mirrored subagent traffic that we already
+      // see via this watcher.
       const role = entry.message?.role;
       if (role === 'assistant') {
         this.processAssistantEntry(tracked, entry);
