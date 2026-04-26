@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import { join } from 'path';
 import { ensureWatcherStarted } from '@/server/watcher';
 import { registry } from '@/server/watcher/registry';
-import { assertPathInHome } from '@/server/workspace/pathGuard';
+import { assertPathInHome, expandTilde } from '@/server/workspace/pathGuard';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -69,8 +69,9 @@ export async function POST(
 
   // MC_WATCH_SCRIPT_PATH overrides the default; when set, use it directly
   // (do not prepend cwd — the user's path is already absolute).
-  const scriptPath =
-    process.env.MC_WATCH_SCRIPT_PATH ?? join(process.cwd(), 'scripts', 'watch-agent.mjs');
+  const scriptPath = expandTilde(
+    process.env.MC_WATCH_SCRIPT_PATH ?? join(process.cwd(), 'scripts', 'watch-agent.mjs'),
+  );
   const windowName = `watch-${agent.name}`;
 
   try {

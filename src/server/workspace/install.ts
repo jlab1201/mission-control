@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { inspectPath } from './inspect';
-import { assertPathInHome } from './pathGuard';
+import { assertPathInHome, expandTilde } from './pathGuard';
 import type { InstallRequest, InstallResponse } from '@/types/workspace';
 
 /**
@@ -12,8 +12,9 @@ import type { InstallRequest, InstallResponse } from '@/types/workspace';
  * process.cwd() is reliable here because Next.js always sets cwd to the
  * project root before starting the dev/prod server.
  */
-export const TEAM_KIT_SOURCE =
-  process.env.MC_TEAM_KIT_SOURCE ?? path.join(process.cwd(), 'team-kit');
+export const TEAM_KIT_SOURCE = expandTilde(
+  process.env.MC_TEAM_KIT_SOURCE ?? path.join(process.cwd(), 'team-kit'),
+);
 
 /**
  * Copies the team-kit from TEAM_KIT_SOURCE into the path specified in the request.

@@ -9,12 +9,15 @@ import path from 'path';
 import os from 'os';
 import type { RegistrySnapshot } from '@/types';
 import { SNAPSHOT_SAVE_DEBOUNCE_MS } from '@/lib/config/runtime';
+import { expandTilde } from '@/server/workspace/pathGuard';
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
 function stateDir(): string {
   // MC_STATE_DIR overrides the default ~/.mission-control/state
-  return process.env.MC_STATE_DIR ?? path.join(os.homedir(), '.mission-control', 'state');
+  return expandTilde(
+    process.env.MC_STATE_DIR ?? path.join(os.homedir(), '.mission-control', 'state'),
+  );
 }
 
 /**

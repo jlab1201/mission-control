@@ -99,6 +99,26 @@ if [ -f .env ] && [ -f .env.example ]; then
   fi
 fi
 
+# --- Migrate broken literal-tilde MC_CONFIG_PATH / MC_STATE_DIR ---
+# Earlier .env.example shipped these with `~/...` defaults. systemd's
+# EnvironmentFile= does NOT expand tildes, so the running process treated `~`
+# as a relative directory name and silently wrote a bogus copy of the config
+# inside the install dir. Comment those lines out so the code's homedir()
+# default takes over, and quarantine the stray `~` directory.
+if [ -f .env ] && grep -Eq '^[[:space:]]*(MC_CONFIG_PATH|MC_STATE_DIR)=~' .env; then
+  warn "Found literal '~' in MC_CONFIG_PATH/MC_STATE_DIR — these never expanded under systemd."
+  warn "Commenting them out so the in-code defaults (real \$HOME) take effect."
+  tmp=".env.tmp.$$"
+  sed -E 's|^([[:space:]]*)(MC_CONFIG_PATH|MC_STATE_DIR)=~|\1# [auto-migrated by update.sh] \2=~|' .env > "$tmp" \
+    && mv "$tmp" .env
+fi
+if [ -d "$INSTALL_DIR/~" ]; then
+  bak="$INSTALL_DIR/~.bak-$(date +%Y%m%d-%H%M%S)"
+  warn "Quarantining stray literal-tilde dir → $bak"
+  warn "It contains a divergent copy of config.json/state — review and merge into ~/.mission-control/ if needed, then delete."
+  mv "$INSTALL_DIR/~" "$bak"
+fi
+
 # --- Verify prerequisites BEFORE touching the running service ---
 # Source nvm if available — this is a common self-hosted setup where pnpm
 # lives under an nvm-managed Node version and isn't in the default PATH

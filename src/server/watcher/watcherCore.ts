@@ -14,6 +14,7 @@
 import { homedir } from 'os';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { expandTilde } from '../workspace/pathGuard';
 
 // ---------------------------------------------------------------------------
 // encodeProjectPath
@@ -60,7 +61,7 @@ export function resolveWatchedProjectPath(): string {
 
   // 2. Environment variable
   if (process.env.WATCH_PROJECT_PATH) {
-    return process.env.WATCH_PROJECT_PATH;
+    return expandTilde(process.env.WATCH_PROJECT_PATH);
   }
 
   // 3. cwd — but don't watch Mission Control's own install dir.
