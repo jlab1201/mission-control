@@ -20,6 +20,8 @@ lcov.info
 .vitest-cache/
 /playwright-report/
 /test-results/
+/.playwright/
+/.playwright-cli/
 
 # ── Build Artifacts ────────────────────────────────────────────────────────────
 *.tsbuildinfo
