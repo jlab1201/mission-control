@@ -2,11 +2,17 @@
 # Mission Control one-line installer.
 #
 #   curl -fsSL https://raw.githubusercontent.com/jlab1201/mission-control/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/jlab1201/mission-control/main/install.sh | bash -s -- --port 8080
+#
+# Flags:
+#   -p, --port N     Set the PORT written to .env (default: 10000)
+#   -h, --help       Print this help and exit
 #
 # Environment overrides:
 #   MC_INSTALL_DIR   Directory to clone into (default: ./mission-control)
 #   MC_REPO_URL      Git URL to clone (default: public GitHub repo)
 #   MC_BRANCH        Branch to check out (default: main)
+#   MC_PORT          Same as --port (flag wins if both set)
 #   MC_SKIP_SETUP    Set to 1 to skip dependency install and .env copy
 #   MC_AUTOSTART     Controls post-install behavior. Values:
 #                      auto     (default) install & start a systemd --user
@@ -20,6 +26,37 @@ set -euo pipefail
 REPO_URL="${MC_REPO_URL:-https://github.com/jlab1201/mission-control.git}"
 INSTALL_DIR="${MC_INSTALL_DIR:-mission-control}"
 BRANCH="${MC_BRANCH:-main}"
+MC_PORT="${MC_PORT:-}"
+
+print_help() {
+  sed -n '2,21p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || cat <<'EOF'
+Mission Control installer
+  -p, --port N    Set the PORT written to .env (default: 10000)
+  -h, --help      Print this help and exit
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -p|--port)
+      [ $# -ge 2 ] || { printf '[MC] Argument required for %s\n' "$1" >&2; exit 1; }
+      MC_PORT="$2"; shift 2 ;;
+    --port=*)  MC_PORT="${1#--port=}"; shift ;;
+    -p=*)      MC_PORT="${1#-p=}"; shift ;;
+    -h|--help) print_help; exit 0 ;;
+    --)        shift; break ;;
+    *)         printf '[MC] Unknown argument: %s (use --help)\n' "$1" >&2; exit 1 ;;
+  esac
+done
+
+if [ -n "$MC_PORT" ]; then
+  case "$MC_PORT" in
+    *[!0-9]*|"") printf '[MC] Invalid --port value: %s (must be integer 1-65535)\n' "$MC_PORT" >&2; exit 1 ;;
+  esac
+  if [ "$MC_PORT" -lt 1 ] || [ "$MC_PORT" -gt 65535 ]; then
+    printf '[MC] Invalid --port value: %s (must be integer 1-65535)\n' "$MC_PORT" >&2; exit 1
+  fi
+fi
 
 if [ -t 1 ]; then
   C_INFO="\033[0;34m"; C_WARN="\033[0;33m"; C_ERR="\033[0;31m"; C_OK="\033[0;32m"; C_OFF="\033[0m"
@@ -151,6 +188,35 @@ else
   bash scripts/setup.sh
 fi
 
+# Apply --port / MC_PORT to .env (in-place update or append).
+mc_set_port_in_env() {
+  local port="$1"
+  [ -f .env ] || die ".env not found — cannot set PORT (did setup.sh run?)"
+  if grep -Eq '^[[:space:]]*#?[[:space:]]*PORT=' .env; then
+    local tmp; tmp="$(mktemp)"
+    sed -E "s|^[[:space:]]*#?[[:space:]]*PORT=.*|PORT=${port}|" .env > "$tmp" && mv "$tmp" .env
+  else
+    printf '\n# Set by install.sh --port\nPORT=%s\n' "$port" >> .env
+  fi
+}
+
+# Read effective PORT from .env in cwd; default 10000.
+mc_resolve_port() {
+  local port=""
+  if [ -f .env ]; then
+    port="$(grep -E '^[[:space:]]*PORT=' .env | head -1 \
+      | sed -E 's/^[[:space:]]*PORT=//; s/[[:space:]]*#.*$//' \
+      | tr -d '"'"'"' \t\r')"
+  fi
+  printf '%s' "${port:-10000}"
+}
+
+if [ -n "$MC_PORT" ]; then
+  info "Setting PORT=$MC_PORT in .env"
+  mc_set_port_in_env "$MC_PORT"
+fi
+EFFECTIVE_PORT="$(mc_resolve_port)"
+
 is_wsl() {
   if [[ -r /proc/sys/kernel/osrelease ]] && grep -qi microsoft /proc/sys/kernel/osrelease; then
     return 0
@@ -256,6 +322,7 @@ UNIT
 }
 
 print_next_steps() {
+  local port="$EFFECTIVE_PORT"
   cat <<EOF
 
 $(ok "Install complete.")
@@ -265,16 +332,17 @@ Next steps:
   \$EDITOR .env                 # set WATCH_PROJECT_PATH to the project you want to observe
 
   # Local development (hot-reload, unoptimized):
-  pnpm dev                      # http://localhost:10000
+  pnpm dev                      # http://localhost:${port}
 
   # Production (optimized build):
   pnpm build
-  pnpm start                    # http://localhost:10000
+  pnpm start                    # http://localhost:${port}
 
   # Or re-run the installer with MC_AUTOSTART=systemd on a Linux host to
   # install & start as a systemd --user service.
 
-Port is controlled by PORT in .env (default 10000).
+Port is controlled by PORT in .env (current: ${port}). Pass --port N to
+install.sh to set it, or edit .env afterward.
 
 Docs:  README.md  |  docs/multi-host-setup.md
 EOF
@@ -282,7 +350,8 @@ EOF
 
 run_systemd_install() {
   install_systemd_unit "$(pwd)"
-  ok "Install complete. Mission Control is running on http://localhost:10000"
+  local port="$EFFECTIVE_PORT"
+  ok "Install complete. Mission Control is running on http://localhost:${port}"
   info "Edit $(pwd)/.env and then: systemctl --user restart mission-control"
 }
 

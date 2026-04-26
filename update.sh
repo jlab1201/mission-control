@@ -122,46 +122,100 @@ if ! command -v pnpm >/dev/null 2>&1; then
   die "pnpm not found in PATH. Install it (npm install -g pnpm) or activate an nvm Node version that has it, then re-run."
 fi
 
-# --- Detect systemd unit (but do NOT stop yet — wait until we're sure
-#     install/build will succeed) ---
+# --- Detect systemd unit (stop if running OR failing — both are unsafe
+#     during pnpm install). ---
 UNIT_FILE="$HOME/.config/systemd/user/mission-control.service"
 UNIT_NAME="mission-control.service"
-WAS_ACTIVE=0
+UNIT_EXISTS=0
 RESTARTED=0
 
 if [ "${MC_SKIP_RESTART:-0}" != "1" ] && [ -f "$UNIT_FILE" ]; then
+  UNIT_EXISTS=1
+  # Stop unconditionally — covers active, activating (auto-restart loop), and
+  # already-failed states. The auto-restart loop is the failure mode when an
+  # nvm Node version was uninstalled and the baked-in pnpm path is stale.
   if systemctl --user is-active --quiet "$UNIT_NAME" 2>/dev/null; then
     info "Stopping $UNIT_NAME before updating dependencies..."
-    systemctl --user stop "$UNIT_NAME" || warn "Could not stop $UNIT_NAME — proceeding anyway. You may need to restart it manually."
-    WAS_ACTIVE=1
   fi
+  systemctl --user stop "$UNIT_NAME" 2>/dev/null || true
+  systemctl --user reset-failed "$UNIT_NAME" 2>/dev/null || true
 fi
 
 # --- Reinstall deps ---
 info "Installing dependencies..."
 pnpm install
 
-# --- Build and restart ---
-if [ "${MC_SKIP_RESTART:-0}" != "1" ] && [ -f "$UNIT_FILE" ]; then
+# --- Regenerate systemd unit + build + start ---
+mc_write_systemd_unit() {
+  # $1 = absolute install dir, $2 = absolute unit file path
+  local install_dir="$1" unit_file="$2"
+  local pnpm_bin node_bin path_dirs
+  pnpm_bin="$(command -v pnpm || true)"
+  node_bin="$(command -v node || true)"
+  if [ -z "$pnpm_bin" ] || [ -z "$node_bin" ]; then
+    return 1
+  fi
+  path_dirs="$(dirname "$node_bin"):$(dirname "$pnpm_bin"):/usr/local/bin:/usr/bin:/bin"
+  mkdir -p "$(dirname "$unit_file")"
+  cat > "$unit_file" <<UNIT
+[Unit]
+Description=Mission Control Dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$install_dir
+EnvironmentFile=-$install_dir/.env
+Environment=PATH=$path_dirs
+Environment=NODE_ENV=production
+ExecStart=$pnpm_bin start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+UNIT
+}
+
+mc_resolve_port() {
+  local port=""
+  if [ -f .env ]; then
+    port="$(grep -E '^[[:space:]]*PORT=' .env | head -1 \
+      | sed -E 's/^[[:space:]]*PORT=//; s/[[:space:]]*#.*$//' \
+      | tr -d '"'"'"' \t\r')"
+  fi
+  printf '%s' "${port:-10000}"
+}
+
+if [ "$UNIT_EXISTS" = "1" ]; then
+  info "Refreshing systemd unit (keeps node/pnpm paths in sync)..."
+  if ! mc_write_systemd_unit "$INSTALL_DIR" "$UNIT_FILE"; then
+    warn "Could not resolve absolute pnpm/node paths — skipping unit refresh."
+  fi
+
   if [ "${MC_SKIP_BUILD:-0}" = "1" ]; then
     info "MC_SKIP_BUILD=1 — skipping pnpm build."
   else
     info "Rebuilding for production..."
     pnpm build
   fi
-  if [ "$WAS_ACTIVE" = "1" ]; then
-    info "Starting $UNIT_NAME..."
-    systemctl --user daemon-reload
-    systemctl --user start "$UNIT_NAME" || warn "Could not start $UNIT_NAME — the update succeeded but the service did not come back up. Run: systemctl --user start $UNIT_NAME"
+
+  info "Starting $UNIT_NAME..."
+  systemctl --user daemon-reload
+  systemctl --user reset-failed "$UNIT_NAME" 2>/dev/null || true
+  if systemctl --user start "$UNIT_NAME"; then
     RESTARTED=1
-    sleep 1
-    systemctl --user --no-pager --lines=0 status "$UNIT_NAME" || true
   else
-    systemctl --user daemon-reload
+    warn "Could not start $UNIT_NAME — the update succeeded but the service did not come back up."
+    warn "Run: systemctl --user status $UNIT_NAME"
   fi
+  sleep 1
+  systemctl --user --no-pager --lines=0 status "$UNIT_NAME" || true
 fi
 
-if [ "$RESTARTED" = "0" ] && [ "$ALREADY_LATEST" = "0" ]; then
+if [ "$RESTARTED" = "0" ] && [ "$UNIT_EXISTS" = "0" ] && [ "$ALREADY_LATEST" = "0" ]; then
   cat <<EOF
 
 $(ok "Code + dependencies updated.")
@@ -176,4 +230,8 @@ Mission Control yourself:
 EOF
 fi
 
+EFFECTIVE_PORT="$(mc_resolve_port)"
+if [ "$RESTARTED" = "1" ]; then
+  ok "Mission Control is running on http://localhost:${EFFECTIVE_PORT}"
+fi
 ok "Update finished."
