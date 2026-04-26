@@ -121,8 +121,22 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === 'completed').length;
-  const agentCount = agents.filter((a) => a.type !== 'subagent').length;
-  const subagentCount = agents.filter((a) => a.type === 'subagent').length;
+  // "agents" = every real agent spawned in this project (everything created via
+  // the Agent tool — Claude generates a fresh UUID per spawn, so re-runs of the
+  // same role are counted as distinct agents). main itself is the parent
+  // session, not a spawn, so it's excluded; synthetic team:* placeholders are
+  // also excluded (they exist only when a task names a role that hasn't been
+  // bound to a real spawn yet).
+  const agentCount = agents.filter((a) => a.type === 'subagent').length;
+  // "subagents" = the subset of agents that were spawned by *another* agent
+  // (parent is not main) — i.e., workers delegated by a team specialist for a
+  // specific work unit. This is a strict subset of `agents`.
+  const subagentCount = agents.filter(
+    (a) =>
+      a.type === 'subagent' &&
+      !!a.parentAgentId &&
+      a.parentAgentId !== 'main',
+  ).length;
 
   return (
     <>
@@ -340,14 +354,14 @@ export function MissionBar({ mission, tasks }: MissionBarProps) {
           label="agents"
           value={String(agentCount)}
           mono
-          title="Main session + any team roles named in TaskCreate that haven't been bound to a real spawned agent yet. Real workers live under 'subagents'."
+          title="Total agents spawned in this project via the Agent tool. Each spawn gets a fresh UUID, so re-runs of the same role count as distinct agents. The main session and synthetic team-role placeholders are excluded."
         />
         <Separator />
         <Stat
           label="subagents"
           value={String(subagentCount)}
           mono
-          title="Real subagents spawned via the Agent tool, one per JSONL transcript. Counted by unique agent ID — re-runs of the same agent do not double-count."
+          title="Strict subset of agents — those spawned by another agent (not directly by main) for a specific delegated unit of work. Useful for telling top-level orchestration apart from nested worker delegation."
         />
       </div>
 
