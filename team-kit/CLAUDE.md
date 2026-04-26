@@ -4,7 +4,7 @@
 
 ## Agent Team Configuration
 
-This project uses Claude Code Agent Teams with 8 specialized agents (7 + context monitor). See `.claude/agents/` for all definitions.
+This project uses Claude Code Agent Teams with 10 specialized agents (9 + context monitor). See `.claude/agents/` for all definitions.
 
 ### Team Structure
 
@@ -17,9 +17,11 @@ This project uses Claude Code Agent Teams with 8 specialized agents (7 + context
 | **QA Engineer** | `qa-engineer.md` | Testing, performance, accessibility audits | Sonnet |
 | **Security** | `security-engineer.md` | Vulnerability scanning, auth, compliance | Sonnet |
 | **Integrations** | `integration-specialist.md` | 3rd-party APIs, middleware, cross-cutting | Sonnet |
+| **Web Scraper** | `web-scraper.md` | Public-site extraction via Playwright (competitive teardowns) | Sonnet |
+| **Design Critic** | `design-critic.md` | Redesign brief authorship from scraped data | Opus |
 | **Context Monitor** | `context-monitor.md` | Context window health auditing | Haiku |
 
-Not every project needs every specialist. A CLI tool may not need a Frontend Dev; a static site may not need a Backend Dev. The Team Lead decides which teammates to spawn based on the project idea.
+Not every project needs every specialist. A CLI tool may not need a Frontend Dev; a static site may not need a Backend Dev. The `web-scraper` + `design-critic` pair is for competitive teardowns / sales pitches and stays dormant on most projects. The Team Lead decides which teammates to spawn based on the project idea.
 
 ---
 

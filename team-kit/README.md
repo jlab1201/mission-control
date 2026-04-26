@@ -1,6 +1,6 @@
 # Team Kit
 
-A portable, drop-in Claude Code agent team. Copy this folder into any project directory and you instantly have 8 specialists (Team Lead + 6 devs + context monitor), a context-management policy, and two kickoff workflows.
+A portable, drop-in Claude Code agent team. Copy this folder into any project directory and you instantly have 10 specialists (Team Lead + 6 devs + web-scraper + design-critic + context monitor), a context-management policy, and two kickoff workflows.
 
 ---
 
@@ -9,9 +9,10 @@ A portable, drop-in Claude Code agent team. Copy this folder into any project di
 ```
 team-kit/
 ├── .claude/
-│   ├── agents/          8 specialist definitions (team-lead, frontend-dev, backend-dev,
+│   ├── agents/          10 specialist definitions (team-lead, frontend-dev, backend-dev,
 │   │                    devops-engineer, qa-engineer, security-engineer,
-│   │                    integration-specialist, context-monitor)
+│   │                    integration-specialist, web-scraper, design-critic,
+│   │                    context-monitor)
 │   ├── skills/          12 reusable skill packs (ctx-mgmt, orchestrator, backend,
 │   │                    frontend, devops, security, mcp-builder, web-testing,
 │   │                    web-builder, theme-factory, integrations, skill-dev)
