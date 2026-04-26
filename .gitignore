@@ -81,3 +81,4 @@ $RECYCLE.BIN/
 # ── SQLite (forward-compat) ────────────────────────────────────────────────────
 *.db
 *.db-journal
+/~/
