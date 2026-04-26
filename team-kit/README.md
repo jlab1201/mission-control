@@ -13,9 +13,10 @@ team-kit/
 │   │                    devops-engineer, qa-engineer, security-engineer,
 │   │                    integration-specialist, web-scraper, design-critic,
 │   │                    context-monitor)
-│   ├── skills/          12 reusable skill packs (ctx-mgmt, orchestrator, backend,
+│   ├── skills/          13 reusable skill packs (ctx-mgmt, orchestrator, backend,
 │   │                    frontend, devops, security, mcp-builder, web-testing,
-│   │                    web-builder, theme-factory, integrations, skill-dev)
+│   │                    playwright-cli, web-builder, theme-factory, integrations,
+│   │                    skill-dev)
 │   ├── settings.json    Permissions and agent-team flag (portable, no local paths)
 │   └── agent-memory/    Empty — specialists populate this as they work
 ├── CLAUDE.md            Team config + context policy. Stack & File Ownership start
