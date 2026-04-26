@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import type { Agent } from '@/types';
 import { useElapsed } from '@/hooks/useElapsed';
 import { shortRole } from '@/lib/utils';
+import { agentColor } from '@/lib/constants/agentColors';
 import { HostBadge } from '@/components/features/HostBadge';
 import { useMissionStore, selectHosts } from '@/lib/store/missionStore';
 
@@ -151,7 +152,7 @@ export function AgentPopover({
 function SubagentRow({ agent }: { agent: Agent }) {
   const isActive = agent.status === 'active';
   const elapsed = useElapsed(agent.startedAt, isActive, agent.lastActiveAt);
-  const color = agent.color ?? 'var(--accent-primary)';
+  const color = agent.color ?? agentColor(agent.subagentType ?? agent.name);
   const label = shortRole(agent.subagentType ?? agent.name) || agent.name;
   const hosts = useMissionStore(useShallow(selectHosts));
   const multiHost = hosts.length > 1;

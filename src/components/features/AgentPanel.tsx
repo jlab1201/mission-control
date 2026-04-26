@@ -12,6 +12,7 @@ import { useElapsed } from '@/hooks/useElapsed';
 import { watchAgent } from '@/lib/api/agents';
 import { AgentPopover } from './AgentPopover';
 import { HostBadge } from '@/components/features/HostBadge';
+import { agentColor } from '@/lib/constants/agentColors';
 import { useMissionStore, selectFilteredAgents, selectHosts } from '@/lib/store/missionStore';
 
 const STATUS_ORDER: Record<string, number> = {
@@ -302,7 +303,9 @@ function AgentRailCard({
 
   const isActive = entry.status === 'active';
   const isDormant = entry.status === 'dormant';
-  const color = entry.color ?? 'var(--accent-primary)';
+  // entry.name is the role key (e.g. "frontend-dev"); resolve through the
+  // shared palette so this rail card matches its tasks on the kanban.
+  const color = entry.color ?? agentColor(entry.name);
   const canWatch = !!entry.live && !!entry.live.transcriptPath;
 
   const handleWatch = async () => {

@@ -9,6 +9,7 @@ import type { Agent } from '@/types';
 import { useElapsed } from '@/hooks/useElapsed';
 import { watchAgent } from '@/lib/api/agents';
 import { shortRole } from '@/lib/utils';
+import { agentColor } from '@/lib/constants/agentColors';
 import { useMissionStore, selectFilteredAgents, selectHosts } from '@/lib/store/missionStore';
 
 interface AgentStripProps {
@@ -28,7 +29,11 @@ function AgentCard({ agent, multiHost }: AgentCardProps) {
   const isActive = agent.status === 'active';
   const elapsed = useElapsed(agent.startedAt, isActive, agent.lastActiveAt);
   const isIdle = agent.status === 'idle';
-  const color = agent.color ?? 'var(--accent-primary)';
+  // Resolve color the same way TaskCard does: agent.color override, then the
+  // shared role palette keyed by subagentType (specialist subagents) or name
+  // (team agents and main). Keeps the strip card color in sync with the
+  // owner-tinted task cards on the kanban.
+  const color = agent.color ?? agentColor(agent.subagentType ?? agent.name);
 
   const ownRole = agent.subagentType ?? agent.name;
   const displayName =
