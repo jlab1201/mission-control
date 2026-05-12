@@ -157,3 +157,60 @@ describe('SubagentWatcher pendingTools status override', () => {
     expect(registry.getAgent(agentId)?.status).toBe('active');
   });
 });
+
+describe('SubagentWatcher agent-<id>.meta.json sidecar enrichment', () => {
+  // Claude Code writes an `agent-<id>.meta.json` sidecar next to every
+  // subagent transcript, e.g. {"agentType":"backend-dev","description":"..."}.
+  // When a subagent is discovered on disk by scanDirectory() — rather than via
+  // a correlated Agent spawn in the main transcript (which happens for
+  // long-running background teammates, or whenever MC attached after the spawn
+  // scrolled out of its cold-start window) — the placeholder must still carry
+  // the team role, or the sidebar can't match it to its rail card and the
+  // running agent shows up as a nameless orphan instead of an active card.
+  it('seeds subagentType and description from the sidecar for an orphan discovered on disk', async () => {
+    const agentId = 'a29fff3884b0c685c';
+    const transcriptPath = join(testDir, `agent-${agentId}.jsonl`);
+    await writeFile(transcriptPath, toolUseLine('tool_1', 'Bash', true));
+    await writeFile(
+      join(testDir, `agent-${agentId}.meta.json`),
+      JSON.stringify({
+        agentType: 'backend-dev',
+        description: 'Phase 1: backend scaffolding',
+      }),
+    );
+
+    const watcher = new SubagentWatcher(testDir);
+    await watcher.coldStart(); // scanDirectory() discovers the file + sidecar
+
+    const agent = registry.getAgent(agentId);
+    expect(agent?.subagentType).toBe('backend-dev');
+    expect(agent?.description).toBe('Phase 1: backend scaffolding');
+  });
+
+  it('falls back to a bare placeholder when no sidecar is present', async () => {
+    const agentId = 'anosidecar000001';
+    const transcriptPath = join(testDir, `agent-${agentId}.jsonl`);
+    await writeFile(transcriptPath, toolUseLine('tool_1', 'Bash', true));
+
+    const watcher = new SubagentWatcher(testDir);
+    await watcher.coldStart();
+
+    const agent = registry.getAgent(agentId);
+    expect(agent).toBeDefined();
+    expect(agent?.subagentType).toBeUndefined();
+  });
+
+  it('ignores a malformed sidecar without throwing', async () => {
+    const agentId = 'amalformedmeta01';
+    const transcriptPath = join(testDir, `agent-${agentId}.jsonl`);
+    await writeFile(transcriptPath, toolUseLine('tool_1', 'Bash', true));
+    await writeFile(join(testDir, `agent-${agentId}.meta.json`), '{ not json');
+
+    const watcher = new SubagentWatcher(testDir);
+    await watcher.coldStart();
+
+    const agent = registry.getAgent(agentId);
+    expect(agent).toBeDefined();
+    expect(agent?.subagentType).toBeUndefined();
+  });
+});

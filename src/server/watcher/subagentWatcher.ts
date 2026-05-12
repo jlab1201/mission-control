@@ -1,4 +1,4 @@
-import { readdirSync, existsSync, statSync } from 'fs';
+import { readdirSync, existsSync, statSync, readFileSync } from 'fs';
 import { join, basename } from 'path';
 import { randomUUID } from 'crypto';
 import { IncrementalReader } from './incrementalReader';
@@ -131,10 +131,19 @@ export class SubagentWatcher {
         // Create a placeholder in the registry if not already present
         if (!registry.getAgent(agentId)) {
           const now = new Date().toISOString();
+          // Claude Code writes an `agent-<id>.meta.json` sidecar next to each
+          // subagent transcript (e.g. {"agentType":"backend-dev","description":…}).
+          // Read it so a subagent discovered on disk — rather than via a
+          // correlated Agent spawn in the main transcript — still carries its
+          // team role; otherwise it's an anonymous orphan the sidebar can't
+          // match to its rail card.
+          const meta = readAgentMeta(this.subagentsDir, agentId);
           const placeholder: Agent = {
             id: agentId,
             type: 'subagent',
             name: agentId.slice(0, 8),
+            subagentType: meta?.agentType,
+            description: meta?.description,
             status: 'idle',
             phase: 'spawning',
             startedAt: now,
@@ -376,5 +385,32 @@ export class SubagentWatcher {
     } else if (ageMs > AGENT_ACTIVE_THRESHOLD_MS && agent.status === 'active') {
       registry.upsertAgent({ ...agent, status: 'idle' });
     }
+  }
+}
+
+interface AgentMeta {
+  agentType?: string;
+  description?: string;
+}
+
+/**
+ * Reads the `agent-<id>.meta.json` sidecar Claude Code writes next to a
+ * subagent transcript. Returns null if absent or malformed; tolerates either
+ * field being missing or non-string.
+ */
+function readAgentMeta(subagentsDir: string, agentId: string): AgentMeta | null {
+  const metaPath = join(subagentsDir, `agent-${agentId}.meta.json`);
+  try {
+    const parsed = JSON.parse(readFileSync(metaPath, 'utf-8')) as {
+      agentType?: unknown;
+      description?: unknown;
+    };
+    return {
+      agentType: typeof parsed.agentType === 'string' ? parsed.agentType : undefined,
+      description:
+        typeof parsed.description === 'string' ? parsed.description : undefined,
+    };
+  } catch {
+    return null;
   }
 }
